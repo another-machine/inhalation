@@ -234,12 +234,13 @@
   summary::-webkit-details-marker { display: none; }
   summary::after { content: "+"; font: 400 18px var(--body); letter-spacing: 0; color: var(--dim); }
   details[open] summary::after { content: "−"; }
-  .group { display: grid; gap: 14px; padding: 0 0 16px; }
+  .group { display: grid; gap: 22px; padding: 0 0 16px; }   /* room between groups of inputs */
   .note { margin: 0; color: var(--dim); font-size: 13px; }
   .row { display: grid; gap: 6px; }
   .row-top { display: flex; justify-content: space-between; align-items: baseline; }
   /* Mix: one line per level (name, slider, value). */
   .mix { gap: 2px; }
+  .mix .row + .row, .mix .fx + .row { margin-top: 14px; }   /* each layer (level + FX amount) is one group */
   .mix .row { grid-template-columns: 84px 1fr 92px; align-items: center; gap: 10px; }
   .mix .row-top output { display: none; }   /* no numbers in the Mix: the slider shows the level */
   .mix .row > .chip { order: 3; justify-self: end; }
@@ -250,7 +251,7 @@
   .mix .row.swept .row-top label::after { content: none; }
   /* FX under each layer's level: None / Crush / Drive, then how much. */
   /* A layer's FX amount, under its level line (only when an FX is on, or in random mode). */
-  .mix .fx { display: grid; grid-template-columns: 84px 1fr 92px; align-items: center; gap: 10px; margin: -2px 0 6px; }
+  .mix .fx { display: grid; grid-template-columns: 84px 1fr 92px; align-items: center; gap: 10px; margin: 0; }
   .mix .fx:not(:has(> input:not([hidden]), > .dual:not([hidden]))) { display: none; }
   .mix .fx > span { color: var(--dim); font-size: 12.5px; padding-left: 10px; }
   .mix .fx input[type="range"], .mix .fx .dual { grid-column: 2 / 3; }
