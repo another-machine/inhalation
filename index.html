@@ -381,12 +381,11 @@
       <span class="auto-next" id="auto-next" aria-live="off"></span>
       <select id="auto-regen" aria-label="Auto regen">
         <option value="0">Auto off</option>
+        <option value="0.5">Auto 30 s</option>
         <option value="1">Auto 1 min</option>
         <option value="3">Auto 3 min</option>
-        <option value="5">Auto 5 min</option>
-        <option value="10">Auto 10 min</option>
-        <option value="20">Auto 20 min</option>
-        <option value="40">Auto 40 min</option>
+        <option value="15">Auto 15 min</option>
+        <option value="60">Auto 1 hr</option>
       </select>
     </label>
   </div>
@@ -615,6 +614,9 @@
   const MOOD_POINTS = [[0.6, 0.3], [0.9, 0.1], [0.42, 0.3], [0.75, 0.35], [0.58, 0.3], [0.88, 0.55],
                        [0.25, 0.1], [0.08, 0.7], [0.42, 0.9]];
   const AUTO_STORE = 'in-halation.autoRegen';   // minutes; 0 = off
+  // The choices (minutes). An older value (5, 10, 20, 40) opens as the nearest choice.
+  const AUTO_CHOICES = [0, 0.5, 1, 3, 15, 60];
+  const snapAuto = (v) => (!(v > 0) ? 0 : AUTO_CHOICES.slice(1).reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a)));
   const RANDOM_STORE = 'in-halation.random';    // { sections: [ids], ranges: { key: [low, high] } }
   const OLD_RANDOM_STORE = 'in-halation.randomize';   // '1' = the old Randomize all
   const HISTORY_STORE = 'in-halation.history';
@@ -667,7 +669,7 @@
     display: (() => { try { return displayFrom(JSON.parse(store.get(DISPLAY_STORE) || '{}')); }
                        catch (e) { return { ...DISPLAY_DEFAULTS }; } })(),
     touchPlay: store.get(TOUCH_STORE) === '1', pointers: new Map(),
-    autoMinutes: Number(store.get(AUTO_STORE)) || 0, autoTimer: 0, autoAt: 0,
+    autoMinutes: store.get(AUTO_STORE) === null ? 3 : snapAuto(Number(store.get(AUTO_STORE))),   // on by default: 3 min autoTimer: 0, autoAt: 0,
     // Random sections (dice) and their ranges. The old Randomize all opens as the four sound sections.
     random: (() => {
       try {
@@ -2793,7 +2795,7 @@
     syncControls();
     if (Number.isInteger(item.view)) setViz(VIEWS[item.view] || VIEWS[0]);
     if (item.display) setDisplay(displayFrom(item.display));
-    state.autoMinutes = Number(item.auto) || 0;
+    state.autoMinutes = snapAuto(Number(item.auto));
     store.set(AUTO_STORE, String(state.autoMinutes));
     $('auto-regen').value = String(state.autoMinutes);
     setVolume(state.settings.volume);
