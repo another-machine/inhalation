@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["J275C7CRW7.app.amplib.inhalation", "J275C7CRW7.app.amplib.inhalation.dev"],
+        "components": [{ "/": "/*", "comment": "Share links: the settings are in the #fragment" }]
+      }
+    ]
+  }
+}

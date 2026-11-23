@@ -1,0 +1,2488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<script>   // Appearance before first paint: 'light' or 'dark', or nothing to follow the system.
+  try { const a = localStorage.getItem('in-halation.appearance'); if (a === 'light' || a === 'dark') document.documentElement.dataset.appearance = a; } catch (e) {}
+</script>
+<title>in halation</title>
+<style>
+  /* Monochrome instrument: the visualization fills the screen; everything else lives in one
+     collapsible panel (bottom sheet on phones, right-hand panel on wide screens). */
+  :root {
+    --black: #000;
+    /* The panel is translucent over a frosted blur when its tone matches the visualization's
+       (dark on dark, light on pale); over the opposite tone it stays nearly solid, so text
+       keeps its contrast. body.bg-light / bg-color / theme-pale mark a pale visualization. */
+    --panel-on-dark: rgba(10, 10, 10, 0.55); --panel-on-pale: rgba(10, 10, 10, 0.94);
+    --panel: var(--panel-on-dark);
+    --ink: #f2f2f2;
+    --dim: #a3a3a3;   /* lighter than before: the panel is see-through over bright light */
+    --line: #2b2b2b;
+    --surface: rgb(10, 10, 10);       /* the panel's solid color (fades, backings, swatch rings) */
+    --on-ink: #000;                    /* text and knobs on an ink-filled control */
+    --accent: #d9d9d9;                 /* slider and switch fill */
+    --tooltip: #161616;
+    --shadow: rgba(0, 0, 0, 0.5);
+    --map-tint: rgba(255, 255, 255, 0.05);
+    --dot-glow: rgba(242, 242, 242, 0.18);
+    --dot-halo: rgba(242, 242, 242, 0.35);
+    --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  /* Appearance (the interface only; the visualization keeps its Theme): follows the
+     system unless set to Light or Dark (html[data-appearance]). */
+  :root[data-appearance="light"] {
+    --panel-on-dark: rgba(246, 246, 244, 0.94); --panel-on-pale: rgba(246, 246, 244, 0.62); --ink: #151515; --dim: #6b6b6b; --line: #d2d2d0;
+    --surface: rgb(246, 246, 244); --on-ink: #fff; --accent: #3a3a3a; --tooltip: #fff;
+    --shadow: rgba(0, 0, 0, 0.18); --map-tint: rgba(0, 0, 0, 0.04);
+    --dot-glow: rgba(21, 21, 21, 0.12); --dot-halo: rgba(21, 21, 21, 0.2);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-appearance="dark"]) {
+      --panel-on-dark: rgba(246, 246, 244, 0.94); --panel-on-pale: rgba(246, 246, 244, 0.62); --ink: #151515; --dim: #6b6b6b; --line: #d2d2d0;
+      --surface: rgb(246, 246, 244); --on-ink: #fff; --accent: #3a3a3a; --tooltip: #fff;
+      --shadow: rgba(0, 0, 0, 0.18); --map-tint: rgba(0, 0, 0, 0.04);
+      --dot-glow: rgba(21, 21, 21, 0.12); --dot-halo: rgba(21, 21, 21, 0.2);
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--black); color: var(--ink); font: 15px/1.45 var(--body); overflow: hidden;
+         -webkit-font-smoothing: antialiased; }
+  #viz { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer;
+         touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  body.touch-play #viz { cursor: crosshair; }
+  /* Background (ids: 0 dark, 1 light, 2 color).
+     1 and 2 invert the canvas. 1 draws each color so it shows with its lightness flipped
+     (white shows black, amber dark amber; Rainbow hues too). 2 draws white (shown black) and a color layer
+     multiplies the white background to the chosen color. The panel stays dark. */
+  #viz-tint { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: multiply; display: none; }
+  body.bg-light #viz, body.bg-color #viz { filter: invert(1); }
+  body.bg-light { background: #fff; }
+  body.bg-light, body.bg-color, body.theme-pale { --panel: var(--panel-on-pale); }
+  body:not(.bg-light):not(.bg-color):not(.theme-pale) { --panel: var(--panel-on-dark); }
+  body.bg-color #viz-tint { display: block; }
+  body.bg-light .handle::before, body.bg-color .handle::before, body.theme-pale .handle::before { background: #111; }
+
+  .handle {
+    position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    width: 64px; height: 28px; border: 0; background: none; cursor: pointer; display: grid; place-items: center;
+    opacity: 0.45; transition: opacity 200ms;
+  }
+  /* The handle sits on the visualization, so it follows the visualization, not the interface. */
+  .handle::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: #f2f2f2; }
+  .handle:hover, .handle:focus-visible { opacity: 0.9; }
+  .handle[hidden] { display: none; }
+  /* Without Play by touch, a tap anywhere opens the panel, so the handle is not drawn
+     (it stays for keyboard users: it shows when it has keyboard focus). */
+  body:not(.touch-play) .handle:not(:focus-visible) { opacity: 0; }
+
+  .panel {
+    position: fixed; left: 0; right: 0; bottom: 0; max-height: 80%; overflow-y: auto; z-index: 5;
+    background: var(--panel); backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
+    padding: 6px max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+    transform: translateY(105%); transition: transform 260ms ease; display: grid; gap: 14px;
+  }
+  .panel.open { transform: none; }
+  @media (min-width: 900px) {
+    .panel { left: auto; top: 0; width: 380px; max-height: none; border-radius: 0; border-top: 0;
+             border-left: 1px solid var(--line); transform: translateX(105%); align-content: start; padding-top: 18px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .panel, .handle { transition: none; } }
+
+  /* The grabber stays at the top of the sheet; content scrolls under it and fades out. */
+  .grip { position: sticky; top: -6px; z-index: 2; justify-self: stretch; height: 34px; border: 0; cursor: pointer;
+          margin: -6px calc(-1 * max(18px, env(safe-area-inset-right))) -12px calc(-1 * max(18px, env(safe-area-inset-left)));
+          padding-top: 9px; display: grid; place-items: start center;
+          background: linear-gradient(to bottom, var(--panel) 55%, transparent); }
+  .grip::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
+  @media (min-width: 900px) { .grip { display: none; } }
+
+  .head { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+  .scene h1 { font: 500 17px/1.3 var(--body); margin: 0; text-wrap: balance; font-variant-numeric: tabular-nums; }
+  .meta { margin: 4px 0 0; color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .chords { margin: 4px 0 0; color: var(--dim); font: 13px var(--mono); letter-spacing: 0.06em; }
+  .chords span + span::before { content: "·"; margin: 0 0.55em; opacity: 0.5; }
+  .collapse { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: none;
+              color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+  .collapse svg { width: 16px; height: 16px; }
+
+  .transport { display: flex; align-items: center; gap: 14px; }
+  .btn { border: 1px solid var(--line); background: none; color: var(--ink); border-radius: 999px;
+         font: 500 14px var(--body); padding: 0 16px; height: 44px; cursor: pointer; display: inline-flex;
+         align-items: center; gap: 8px; }
+  .btn svg { width: 18px; height: 18px; }
+  .btn { white-space: nowrap; }
+  .btn.primary { background: var(--ink); color: var(--on-ink); border-color: var(--ink); min-width: 112px; justify-content: center; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .seg { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .seg button { border: 0; background: none; color: var(--dim); border-radius: 999px; height: 34px; padding: 0 2px;
+                font: 500 12.5px var(--body); cursor: pointer; }
+  .seg button[aria-checked="true"] { background: var(--ink); color: var(--on-ink); }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  .status { margin: 0; color: var(--dim); font-size: 13px; }
+  .seg.sweep { grid-template-columns: repeat(4, 1fr); min-width: 230px; }
+  .seg.bg { grid-template-columns: repeat(3, 1fr); min-width: 190px; }
+  .seg.two { grid-template-columns: repeat(2, 1fr); min-width: 150px; }
+  .seg.theme { grid-template-columns: repeat(4, 1fr); min-width: 250px; }
+  .theme-rows { display: grid; gap: 12px; }
+  [hidden] { display: none !important; }   /* the hidden attribute wins over display rules */
+  .theme-rows .auto .swatches { flex-wrap: nowrap; }
+  .swatch.same { background: none; color: var(--dim); font: 15px var(--body); display: grid; place-items: center; }
+  .auto { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .auto-right { display: flex; align-items: center; gap: 10px; }
+  .auto-next { font: 13px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+  .auto select { appearance: none; -webkit-appearance: none; background: none; color: var(--ink);
+                 border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font: 500 13px var(--body); cursor: pointer; }
+  .status:empty { display: none; }
+  .hint { margin: 0; color: var(--ink); font-size: 13px; }
+  .caption { margin: -6px 0 0; font-size: 12.5px; }
+  .reset { justify-self: start; }
+  /* More sound: the three sound sections, inside one closed group. */
+  .nested { padding: 0 0 8px 12px; border-left: 1px solid var(--line); margin-bottom: 12px; }
+  .nested details:first-child { border-top: 0; }
+  details.sub { border-top: 1px solid var(--line); }
+  details.sub > .group { padding-top: 4px; }
+  /* Shown once, the first time the panel closes. */
+  .toast { position: fixed; left: 50%; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+           margin: 0; padding: 8px 14px; border-radius: 999px; background: var(--panel); color: var(--ink);
+           border: 1px solid var(--line); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+           font-size: 13px; z-index: 6; pointer-events: none; transition: opacity 400ms; }
+
+  details { border-top: 1px solid var(--line); }
+  summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; font: 500 11px var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font: 400 18px var(--body); letter-spacing: 0; }
+  details[open] summary::after { content: "−"; }
+  .group { display: grid; gap: 14px; padding: 0 0 16px; }
+  .note { margin: 0; color: var(--dim); font-size: 13px; }
+  .row { display: grid; gap: 6px; }
+  .row-top { display: flex; justify-content: space-between; align-items: baseline; }
+  /* Mix: one line per level (name, slider, value). */
+  .mix { gap: 2px; }
+  .mix .row { grid-template-columns: 84px 1fr 3.5ch; align-items: center; gap: 10px; }
+  .mix .row-top { display: contents; }
+  .mix .row-top label { order: 0; font-size: 14px; white-space: nowrap; }
+  .mix .row input[type="range"] { order: 1; }
+  .mix .row-top output { order: 2; text-align: right; }
+  .mix .row.swept .row-top label::after { content: none; }
+  .row-top output { font: 13px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; margin: 0; }
+  input[type="range"]:disabled { opacity: 0.55; cursor: default; }
+  /* End words under a slider (short … long) instead of a number. */
+  .ends { display: flex; justify-content: space-between; margin-top: -4px; color: var(--dim); font-size: 12px; }
+  .row.worded .row-top output { display: none; }
+  .row.swept .row-top label::after { content: "sweeping"; margin-left: 8px; font: 11px var(--mono); color: var(--dim);
+                                     letter-spacing: 0.04em; }
+  .stepper { display: flex; align-items: center; justify-content: space-between; }
+  .stepper .controls { display: flex; align-items: center; gap: 12px; }
+  .stepper button { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: none;
+                    color: var(--ink); font-size: 18px; cursor: pointer; }
+  .stepper output { font: 15px var(--mono); min-width: 1.5ch; text-align: center; }
+  .switch { display: flex; justify-content: space-between; align-items: center; }
+  /* On/off switches (Revoice, Play by touch, Auto cycle), drawn like iOS's. */
+  .switch input { appearance: none; -webkit-appearance: none; margin: 0; flex: none; position: relative; cursor: pointer;
+                  width: 46px; height: 28px; border-radius: 14px; background: var(--line); transition: background 0.15s; }
+  .switch input::before { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+                          background: var(--dim); transition: transform 0.15s, background 0.15s; }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::before { transform: translateX(18px); background: var(--surface); }
+  /* One Octaves row: lowest and highest, each with − and +. */
+  .stepper.octaves .controls { gap: 6px; }
+  .stepper.octaves button { width: 30px; height: 30px; }
+  .stepper .to { color: var(--dim); font-size: 13px; margin: 0 4px; }
+  /* Peek: while a View control is in use on a phone, the panel goes see-through and only
+     that control's row stays, so the whole animation shows. */
+  .panel { transition: transform 260ms ease, background-color 160ms, border-color 160ms; }
+  .panel.peek { background-color: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; border-color: transparent; }
+  .panel.peek * { visibility: hidden; }
+  .panel.peek .peek-keep, .panel.peek .peek-keep * { visibility: visible; }
+  .panel.peek .peek-keep { background: color-mix(in srgb, var(--surface) 72%, transparent); border-radius: 12px;
+                           box-shadow: 0 0 0 8px color-mix(in srgb, var(--surface) 72%, transparent); }
+  @media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
+  /* Small group headings inside a section (View: Shape, Color, Light). */
+  .subhead { margin: 6px 0 -4px; font: 500 11px var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+  .subhead:first-child { margin-top: 0; }
+  .line { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--dim);
+          font: 13px var(--mono); }
+  .small { height: 34px; font-size: 13px; padding: 0 14px; }
+  .saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .saved li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+  .saved .what { font-size: 14px; }
+  .saved .when { display: block; color: var(--dim); font: 12px var(--mono); }
+  .saved .x { width: 34px; padding: 0; justify-content: center; }
+  .saved:empty::before { content: "Nothing saved yet."; color: var(--dim); font-size: 13px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .swatch { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); cursor: pointer;
+            box-shadow: inset 0 0 0 4px var(--surface); }
+  .swatch[aria-checked="true"] { border-color: var(--ink); border-width: 2px; }
+  .swatch:disabled { opacity: 0.3; cursor: default; }
+  .custom { position: relative; width: 32px; height: 32px; border-radius: 50%; border: 1px dashed var(--dim);
+            overflow: hidden; display: grid; place-items: center; color: var(--dim); font-size: 16px; }
+  .custom[aria-checked="true"] { border: 2px solid var(--ink); }
+  .custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  .swatch.rainbow { background: conic-gradient(#ff8f8f, #ffd98f, #b8ff8f, #8fffd9, #8fb8ff, #d98fff, #ff8f8f); }
+  .row[hidden] { display: none; }
+  /* Hover (or keyboard focus) on a label shows what the setting does. */
+  [data-info] { position: relative; cursor: help; text-decoration: underline dotted var(--dim);
+                text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  [data-info]:hover::after, label:focus-within > [data-info]::after, [data-info].show-info::after {
+    content: attr(data-info); position: absolute; left: 0; top: calc(100% + 6px); z-index: 10;
+    width: max-content; max-width: 250px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--tooltip); color: var(--ink); font: 12.5px/1.4 var(--body); letter-spacing: 0; text-transform: none;
+    text-decoration: none; white-space: normal; pointer-events: none; box-shadow: 0 6px 18px var(--shadow); }
+  /* Mood map: x = dark (left) to bright (right), y = calm (bottom) to active (top). */
+  .map-wrap { display: grid; gap: 6px; }
+  .map { position: relative; height: 230px; border: 1px solid var(--line); border-radius: 12px; cursor: crosshair;
+         touch-action: none; -webkit-user-select: none; user-select: none; overflow: hidden;
+         background: linear-gradient(to top, var(--map-tint), transparent 70%); }
+  .map:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+  /* One label at the middle of each edge, all in the same style. */
+  .map-axis { position: absolute; font: 11px var(--body); letter-spacing: 0.08em; text-transform: uppercase;
+              color: var(--dim); pointer-events: none; }
+  .map-axis.top { top: 6px; left: 50%; transform: translateX(-50%); }
+  .map-axis.bottom { bottom: 6px; left: 50%; transform: translateX(-50%); }
+  .map-axis.left { left: 8px; top: 50%; transform: translateY(-50%); }
+  .map-axis.right { right: 8px; top: 50%; transform: translateY(-50%); }
+  .map-dot { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%;
+             background: var(--ink); box-shadow: 0 0 0 4px var(--dot-glow), 0 0 14px var(--dot-halo);
+             pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="viz" aria-label="Visualization. Tap to show or hide the controls."></canvas>
+<div id="viz-tint" aria-hidden="true"></div>
+<button class="handle" id="handle" aria-label="Show controls" aria-controls="panel" aria-expanded="true" hidden></button>
+
+<p class="toast" id="toast" role="status" hidden>Tap anywhere for the controls</p>
+<aside class="panel open" id="panel" aria-label="Controls">
+  <button class="grip" id="grip" aria-label="Hide controls"></button>
+  <div class="head">
+    <div class="scene">
+      <h1 id="scene-meta">Loading the engine…</h1>
+      <p class="chords" id="scene-chords"></p>
+    </div>
+    <button class="collapse" id="collapse" aria-label="Hide controls">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6l5 5 5-5"/></svg>
+    </button>
+  </div>
+
+  <div class="transport">
+    <button class="btn primary" id="play-btn" disabled>
+      <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+      <span id="play-text">Play</span>
+    </button>
+    <button class="btn" id="regen-btn" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/></svg>
+      Regen
+    </button>
+    <button class="btn" id="back-btn" disabled aria-label="Back to the last scene" title="Back to the last scene">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12"/></svg>
+      Back
+    </button>
+  </div>
+  <p class="hint" id="hint-start" hidden>Tap Play, then drag the point on the map to change the mood.</p>
+
+  <div class="auto">
+    <label for="auto-regen" data-info="Plays a new scene (a new seed) after this time. The countdown shows the time left.">Auto regen</label>
+    <span class="auto-right">
+      <span class="auto-next" id="auto-next" aria-live="off"></span>
+      <select id="auto-regen">
+        <option value="0">Off</option>
+        <option value="1">Every 1 min</option>
+        <option value="3">Every 3 min</option>
+        <option value="5">Every 5 min</option>
+        <option value="10">Every 10 min</option>
+        <option value="20">Every 20 min</option>
+        <option value="40">Every 40 min</option>
+      </select>
+    </span>
+  </div>
+  <label class="switch" for="randomize"><span data-info="Each Regen and Auto regen also picks random values for every sound setting: the mood, Motifs, Sound bed and Noise bed. The Mix levels and the View stay as they are. Off changes only the seed.">Randomize all</span>
+    <input type="checkbox" id="randomize" role="switch"></label>
+
+  <p class="status" id="status" role="status"></p>
+
+  <form id="settings-form" autocomplete="off">
+    <details open>
+      <summary>Mood</summary>
+      <div class="group">
+        <div class="map-wrap">
+          <div class="map" id="mood-map" tabindex="0" role="group"
+               aria-label="Mood map. Left to right: dark to bright scale. Bottom to top: calm to active. Arrow keys move the point."
+               aria-describedby="map-readout">
+            <span class="map-axis top">Active</span><span class="map-axis bottom">Calm</span>
+            <span class="map-axis left">Dark</span><span class="map-axis right">Bright</span>
+            <span class="map-dot" id="map-dot"></span>
+          </div>
+        </div>
+        <p class="note" id="map-readout" aria-live="polite"></p>
+      </div>
+    </details>
+    <details open>
+      <summary>Mix</summary>
+      <div class="group mix">
+        <div class="row" data-key="volume"></div>
+        <div class="row" data-key="motifLevel"></div>
+        <div class="row" data-key="padLevel"></div>
+        <div class="row" data-key="noiseLevel"></div>
+        <button type="button" class="btn small reset" data-reset="mix">Reset Mix</button>
+      </div>
+    </details>
+    <details id="more-sound">
+      <summary>More sound</summary>
+      <div class="nested">
+      <details>
+        <summary>Motifs</summary>
+        <div class="group">
+          <div class="row" data-key="motifDensity"></div>
+          <div class="row" data-key="motifNoteLength"></div>
+          <div class="row" data-key="motifArticulation"></div>
+          <div class="stepper octaves"><span data-info="The octave range the motifs play in: from the lowest to the highest. 1 to 7 is the whole range (E1 to C7).">Octaves</span><span class="controls">
+            <button type="button" id="mlow-down" aria-label="Lower the motifs' lowest octave">−</button>
+            <output id="motifOctaveLow-out" aria-label="Motifs' lowest octave">1</output>
+            <button type="button" id="mlow-up" aria-label="Raise the motifs' lowest octave">+</button>
+            <span class="to" aria-hidden="true">to</span>
+            <button type="button" id="mhigh-down" aria-label="Lower the motifs' highest octave">−</button>
+            <output id="motifOctaveHigh-out" aria-label="Motifs' highest octave">7</output>
+            <button type="button" id="mhigh-up" aria-label="Raise the motifs' highest octave">+</button></span></div>
+          <div class="row" data-key="motifReverb"></div>
+          <div class="row" data-key="motifGrit"></div>
+          <button type="button" class="btn small reset" data-reset="motifs">Reset Motifs</button>
+        </div>
+      </details>
+      <details>
+        <summary>Sound bed</summary>
+        <div class="group">
+          <div class="row" data-key="padLength"></div>
+          <div class="row" data-key="padDrift"></div>
+          <div class="row" data-key="padWidth"></div>
+          <div class="stepper octaves"><span data-info="The octave range the sound bed uses: from the lowest to the highest. Motifs have their own range.">Octaves</span><span class="controls">
+            <button type="button" id="low-down" aria-label="Lower the lowest octave">−</button>
+            <output id="padOctaveLow-out" aria-label="Lowest octave">2</output>
+            <button type="button" id="low-up" aria-label="Raise the lowest octave">+</button>
+            <span class="to" aria-hidden="true">to</span>
+            <button type="button" id="high-down" aria-label="Lower the highest octave">−</button>
+            <output id="padOctaveHigh-out" aria-label="Highest octave">5</output>
+            <button type="button" id="high-up" aria-label="Raise the highest octave">+</button></span></div>
+          <div class="row" data-key="padOverlap"></div>
+          <label class="switch" for="revoice"><span data-info="Each time the chords come around again, spread their notes differently. Off repeats the same voicing.">Vary chords</span>
+            <input type="checkbox" id="revoice" role="switch"></label>
+          <div class="auto"><span data-info="How each sound bed note moves to the next chord's note. Glide: one smooth slide. Steps: it jumps through a few random notes of the scale in between, then lands on the new note.">Transition</span>
+            <div class="seg two" role="radiogroup" aria-label="Transition">
+              <button type="button" role="radio" id="transition-0" aria-checked="true">Glide</button>
+              <button type="button" role="radio" id="transition-1" aria-checked="false">Steps</button>
+            </div>
+          </div>
+          <p class="note caption">How notes move to the next chord: Glide slides, Steps walks through notes in between.</p>
+          <button type="button" class="btn small reset" data-reset="pad">Reset Sound bed</button>
+        </div>
+      </details>
+      <details>
+        <summary>Noise bed</summary>
+        <div class="group">
+          <div class="auto"><span data-info="Slowly moves the noise Tone, Pan and Width over time. The level stays where you set it.">Sweep</span>
+            <div class="seg sweep" role="radiogroup" aria-label="Sweep">
+              <button type="button" role="radio" id="sweep-0" aria-checked="true">Off</button>
+              <button type="button" role="radio" id="sweep-1" aria-checked="false">Slow</button>
+              <button type="button" role="radio" id="sweep-3" aria-checked="false">Med</button>
+              <button type="button" role="radio" id="sweep-2" aria-checked="false">Fast</button>
+            </div>
+          </div>
+          <p class="note caption">Sweep moves the noise by itself: its tone, place and width drift over time.</p>
+          <div class="row" data-key="noiseTone"></div>
+          <div class="row" data-key="noisePan"></div>
+          <div class="row" data-key="noiseWidth"></div>
+          <button type="button" class="btn small reset" data-reset="noise">Reset Noise bed</button>
+        </div>
+      </details>
+      </div>
+    </details>
+    <details open>
+      <summary>View</summary>
+      <div class="group" id="view-group">
+        <p class="subhead">Shape</p>
+        <div class="seg" role="radiogroup" aria-label="Visualization">
+          <button type="button" role="radio" aria-checked="true" id="viz-shapes">Ring</button>
+          <button type="button" role="radio" aria-checked="false" id="viz-traces">Lat</button>
+          <button type="button" role="radio" aria-checked="false" id="viz-columns">Lon</button>
+          <button type="button" role="radio" aria-checked="false" id="viz-weave">Mesh</button>
+          <button type="button" role="radio" aria-checked="false" id="viz-none">None</button>
+        </div>
+        <div class="auto">
+          <span data-info="Particles that show the noise bed. Grain: drifting specks; brighter noise is finer and faster, and louder noise adds more. Flock: particles that flock on the noise bed's wind, are drawn into the lines and vanish into them; Noise Tone sets how fast they fly.">Particles</span>
+          <div class="seg bg" role="radiogroup" aria-label="Particles">
+            <button type="button" role="radio" id="particles-0" aria-checked="false">Off</button>
+            <button type="button" role="radio" id="particles-1" aria-checked="false">Grain</button>
+            <button type="button" role="radio" id="particles-2" aria-checked="true">Flock</button>
+          </div>
+        </div>
+        <p class="subhead">Color</p>
+        <div class="auto">
+          <span data-info="Dark: the light on black. Light: the light drawn dark on white, in its color (white shows black). Color: the light color fills the screen and the lines are black; this turns Rainbow off. Custom: choose the background, line and glow colors.">Theme</span>
+          <div class="seg theme" role="radiogroup" aria-label="Theme">
+            <button type="button" role="radio" id="bg-0" aria-checked="true">Dark</button>
+            <button type="button" role="radio" id="bg-1" aria-checked="false">Light</button>
+            <button type="button" role="radio" id="bg-2" aria-checked="false">Color</button>
+            <button type="button" role="radio" id="bg-3" aria-checked="false">Custom</button>
+          </div>
+        </div>
+        <div id="light-color-rows">
+          <div class="row-top"><span data-info="The color of the visualization's light. In the Custom theme it sets the line color.">Color</span><output id="color-out"></output></div>
+          <div class="swatches" id="swatches" role="radiogroup" aria-label="Color"></div>
+        </div>
+        <div class="theme-rows" id="theme-rows" hidden>
+          <div class="auto"><span data-info="The color that fills the screen.">Background color</span>
+            <div class="swatches"><label class="custom" id="theme-bg" title="Background color">+<input type="color" aria-label="Background color"></label></div></div>
+          <div class="auto"><span data-info="The color of the lines: one color, or Rainbow (a random color for each voice).">Line color</span>
+            <div class="swatches" role="radiogroup" aria-label="Line color">
+              <button type="button" class="swatch rainbow" role="radio" id="theme-lines-rainbow" aria-label="Rainbow lines"></button>
+              <label class="custom" id="theme-lines" role="radio" title="Line color">+<input type="color" aria-label="Line color"></label></div></div>
+          <div class="auto"><span data-info="The color of the glow around the lines: the same as the lines, Rainbow, or its own color. A glow darker than the background shades it, like a shadow.">Glow color</span>
+            <div class="swatches" role="radiogroup" aria-label="Glow color">
+              <button type="button" class="swatch same" role="radio" id="theme-glow-same" aria-label="Glow the same as the lines">=</button>
+              <button type="button" class="swatch rainbow" role="radio" id="theme-glow-rainbow" aria-label="Rainbow glow"></button>
+              <label class="custom" id="theme-glow" role="radio" title="Glow color">+<input type="color" aria-label="Glow color"></label></div></div>
+        </div>
+        <label class="switch" for="cycle"><span data-info="The light slowly drifts around the color wheel.">Auto cycle</span>
+          <input type="checkbox" id="cycle" role="switch"></label>
+        <div class="row" id="cycle-row" hidden>
+          <div class="row-top"><label for="cycle-speed" data-info="The time for one full turn of the color wheel.">Cycle speed</label><output id="cycle-out" for="cycle-speed"></output></div>
+          <input type="range" id="cycle-speed" min="0" max="1" step="0.001">
+        </div>
+        <details class="sub">
+          <summary>More view</summary>
+          <div class="group">
+        <p class="subhead">Light</p>
+        <div class="row">
+          <div class="row-top"><label for="glow" data-info="How much the light blooms around each line.">Glow</label><output id="glow-out" for="glow"></output></div>
+          <input type="range" id="glow" min="0" max="1.25" step="0.01">
+        </div>
+        <div class="row">
+          <div class="row-top"><label for="burn" data-info="How long the light stays before it fades.">Burn-in</label><output id="burn-out" for="burn"></output></div>
+          <input type="range" id="burn" min="0" max="1.25" step="0.01">
+        </div>
+        <p class="subhead">Touch</p>
+        <label class="switch" for="touch-play"><span data-info="Press the screen for a note where its pitch is drawn. Hold and drag to glide.">Play by touch</span>
+          <input type="checkbox" id="touch-play" role="switch"></label>
+          </div>
+        </details>
+      </div>
+    </details>
+    <details>
+      <summary>Saved</summary>
+      <div class="group">
+        <div class="line"><span>Sound and view, on this device</span>
+          <button type="button" class="btn small" id="save-btn">Save current</button></div>
+        <ul class="saved" id="saved-list"></ul>
+      </div>
+    </details>
+    <details>
+      <summary>Scene</summary>
+      <div class="group">
+        <div class="line"><span id="seed-label">Seed</span>
+          <button type="button" class="btn small" id="share-btn" data-info="A link that opens in halation with this sound and look.">Share</button></div>
+        <div class="line"><span id="engine-label"></span>
+          <button type="button" class="btn small" id="reset-btn">Reset to defaults</button></div>
+        <div class="auto">
+          <span data-info="Light or dark controls. System follows the phone or computer setting. The visualization keeps its own Theme.">Appearance</span>
+          <div class="seg bg" role="radiogroup" aria-label="Appearance">
+            <button type="button" role="radio" id="appearance-system" aria-checked="true">System</button>
+            <button type="button" role="radio" id="appearance-light" aria-checked="false">Light</button>
+            <button type="button" role="radio" id="appearance-dark" aria-checked="false">Dark</button>
+          </div>
+        </div>
+      </div>
+    </details>
+  </form>
+</aside>
+
+<script src="worklet.js"></script>
+<script>
+(() => {
+  const LABELS = {
+    padLength: 'Length', padDrift: 'Drift', padWidth: 'Width', padOverlap: 'Blend', noiseLevel: 'Noise bed', noiseTone: 'Tone', noisePan: 'Pan', noiseWidth: 'Width',
+    motifDensity: 'Density', motifNoteLength: 'Note length', motifArticulation: 'Smoothness', motifReverb: 'Reverb', motifGrit: 'Grit', motifLevel: 'Motifs',
+    padLevel: 'Sound bed', volume: 'Volume',
+  };
+  // Words at the two ends of a slider, shown instead of a number (for people new to it).
+  const ENDS = {
+    motifDensity: ['rare', 'often'], motifNoteLength: ['short', 'long'], motifArticulation: ['smooth', 'detached'],
+    motifReverb: ['dry', 'spacious'], motifGrit: ['clean', 'gritty'],
+    padLength: ['short', 'long'], padDrift: ['still', 'moving'], padWidth: ['close', 'wide'], padOverlap: ['separate', 'blended'],
+    noiseTone: ['dark', 'bright'], noisePan: ['left', 'right'], noiseWidth: ['narrow', 'wide'],
+  };
+  // Hover info for each slider row (labels with data-info show it as a tooltip).
+  const INFO = {
+    padLength: 'How long each chord lasts: low is short, high is long.',
+    padDrift: 'How much the sound bed moves: how fast and how deep its notes waver, and how far a note may leap to the next chord.',
+    padWidth: 'How wide each chord is: low keeps its notes close; high spreads them out over the octave range.',
+    padOverlap: 'How much each chord fades into the next: low changes cleanly, high blends them together.',
+    noiseLevel: 'How loud the noise bed is.',
+    noiseTone: 'How bright the noise bed is: low is a dark rumble, high is a bright hiss.',
+    noisePan: 'Where the noise bed sits, from left (L) through the centre (C) to right (R).',
+    noiseWidth: 'How far apart the two sides of the noise bed are: low is one narrow point, high is wide left and right.',
+    motifGrit: 'Makes the motifs rough and grainy, like an old sampler. Off at the left.',
+    motifReverb: 'How much room the motifs ring in: low is dry and close, high is a large space that sets them back.',
+    motifDensity: 'How often motifs (short melodies and runs, over every octave, bass included) play.',
+    motifNoteLength: 'How long each motif note lasts.',
+    motifArticulation: 'Legato (low: notes flow into each other, soft) to staccato (high: short, detached notes with gaps).',
+    motifLevel: 'How loud the motifs are.',
+    padLevel: 'How loud the sound bed (the sustained chords under everything) is.',
+    volume: 'The output level. It changes live, with no new scene.',
+  };
+  // Mood map: light (x) picks one of six scales, dark to bright; energy (y) sets tempo
+  // (about 42 + 70 × energy bpm), how much the chords move, and timbre roughness.
+  const SCALES = ['Phrygian', 'Aeolian', 'Dorian', 'Mixolydian', 'Ionian', 'Lydian'];
+  const scaleIndex = (light) => Math.min(5, Math.floor(light * 6));
+  // Older settings use a mood id instead (0 auto, 1 meditate … 8 pulse); they open at
+  // these points, with the noise Tone taken from their brightness.
+  const MOOD_POINTS = [[0.6, 0.3], [0.9, 0.1], [0.42, 0.3], [0.75, 0.35], [0.58, 0.3], [0.88, 0.55],
+                       [0.25, 0.1], [0.08, 0.7], [0.42, 0.9]];
+  const AUTO_STORE = 'in-halation.autoRegen';   // minutes; 0 = off
+  const RANDOM_STORE = 'in-halation.randomize';  // '1': Regen and Auto regen randomize every sound setting
+  const SAVED_STORE = 'in-halation.saved';      // [{ at, query, view, display, auto }]
+  const STORE = 'in-halation.query', VIZ_STORE = 'in-halation.viz', DISPLAY_STORE = 'in-halation.display', TOUCH_STORE = 'in-halation.touchPlay';
+  // View ids are their index here (0 Ring, 2 Lat, 3 Lon, 4 Mesh, 5 None). Id 1 was Trail
+  // (removed); it stays reserved, and settings that still have it open in Ring.
+  const VIEWS = ['shapes', null, 'traces', 'columns', 'weave', 'none'];
+  const COLORS = [['White', '#ffffff'], ['Phosphor green', '#7dffa8'], ['Amber', '#ffbe6b'], ['Cyan', '#8fe4ff'], ['Violet', '#c9a8ff']];
+  // rainbow: each node gets its own random hue. cycle: hues drift around the wheel,
+  // one turn every cycleSeconds (10 s … 10 min).
+  // Particles ids: 0 Off, 1 Grain, 2 Flock. Theme ids: 0 Dark, 1 Light, 2 Color, 3 Custom.
+  const DISPLAY_DEFAULTS = { color: '#ffffff', glow: 0.55, burnIn: 0.55, particles: 2, rainbow: false, colorCycle: false,
+                             colorCycleSeconds: 120, theme: 0, themeBackground: null, themeLines: '#ffffff', themeGlow: 'lines' };
+  // View settings saved before the names changed: burn, cycle, cycleSeconds, background,
+  // themeBg, and noise (on/off) + noiseStyle (0 Grain, 1 Flock). The new name wins.
+  function displayFrom(saved) {
+    const d = { ...saved };
+    const old = { burn: 'burnIn', cycle: 'colorCycle', cycleSeconds: 'colorCycleSeconds', background: 'theme', themeBg: 'themeBackground' };
+    for (const [from, to] of Object.entries(old)) {
+      if (from in d && !(to in d)) d[to] = d[from];
+      delete d[from];
+    }
+    if (!('particles' in d) && ('noise' in d || 'noiseStyle' in d)) d.particles = d.noise === false ? 0 : d.noiseStyle === 0 ? 1 : 2;
+    delete d.noise;
+    delete d.noiseStyle;
+    return { ...DISPLAY_DEFAULTS, ...d };
+  }
+  const CYCLE_MIN = 10, CYCLE_MAX = 600;
+  // Slider 0 … 1 (slow … fast) <-> seconds per cycle, on a log scale.
+  const cycleSecondsFor = (t) => CYCLE_MAX / Math.pow(CYCLE_MAX / CYCLE_MIN, t);
+  const cycleSliderFor = (s) => Math.log(CYCLE_MAX / Math.min(CYCLE_MAX, Math.max(CYCLE_MIN, s))) / Math.log(CYCLE_MAX / CYCLE_MIN);
+  const cycleText = (s) => s >= 60 ? `${(s / 60).toFixed(s % 60 < 1 || s >= 120 ? 0 : 1)} min` : `${Math.round(s)} s`;
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } },
+  };
+  // The app was called Noisegen, and its settings used `noisegen.*` keys. Copy them to the
+  // new keys once, so saved settings carry over; the old keys are left in place.
+  for (const name of ['query', 'viz', 'display', 'autoRegen', 'touchPlay', 'saved']) {
+    const old = store.get(`noisegen.${name}`);
+    if (old !== null && store.get(`in-halation.${name}`) === null) store.set(`in-halation.${name}`, old);
+  }
+
+  const state = {
+    local: null, js: null, bytes: null, moods: [], settings: null, seed: 0.5, scene: null,
+    ctx: null, node: null, engine: null, kind: null, playing: false, visual: null,
+    display: (() => { try { return displayFrom(JSON.parse(store.get(DISPLAY_STORE) || '{}')); }
+                       catch (e) { return { ...DISPLAY_DEFAULTS }; } })(),
+    touchPlay: store.get(TOUCH_STORE) === '1', pointers: new Map(),
+    autoMinutes: Number(store.get(AUTO_STORE)) || 0, autoTimer: 0, autoAt: 0,
+    randomize: store.get(RANDOM_STORE) === '1',   // total randomization on each regen
+    pending: 0, suspendTimer: 0,
+    viz: (() => {   // stored as a numeric id; older saved names are still read
+      const v = store.get(VIZ_STORE);
+      return VIEWS[Number(v)] || (VIEWS.includes(v) ? v : VIEWS[0]);
+    })(),
+  };
+
+  const randomSeed = () => Number((0.000001 + Math.random() * 0.999998).toFixed(6));
+  function status(text) { $('status').textContent = text || ''; }
+
+  // ---- settings <-> query string ------------------------------------------------
+
+  // The stored settings (and later share links): the key names are fixed; old names are
+  // still read as aliases by the parser (core and JS).
+  function query() {
+    const s = state.settings;
+    const n = (v) => Number(v.toFixed(3));
+    return `seed=${state.seed.toFixed(6)}&light=${n(s.light)}&energy=${n(s.energy)}&volume=${n(s.volume)}` +
+      `&motifLevel=${n(s.motifLevel)}&padLevel=${n(s.padLevel)}&noiseLevel=${n(s.noiseLevel)}` +
+      `&motifDensity=${n(s.motifDensity)}&motifNoteLength=${n(s.motifNoteLength)}&motifArticulation=${n(s.motifArticulation)}` +
+      `&motifOctaveLow=${s.motifOctaveLow}&motifOctaveHigh=${s.motifOctaveHigh}&motifReverb=${n(s.motifReverb)}` +
+      `&motifGrit=${n(s.motifGrit)}` +
+      `&padLength=${n(s.padLength)}&padDrift=${n(s.padDrift)}&padWidth=${n(s.padWidth)}` +
+      `&padOctaveLow=${s.padOctaveLow}&padOctaveHigh=${s.padOctaveHigh}&padOverlap=${n(s.padOverlap)}` +
+      `&padRevoice=${s.padRevoice ? 1 : 0}&padTransition=${s.padTransition || 0}` +
+      `&noiseSweep=${s.noiseSweep || 0}&noiseTone=${n(s.noiseTone)}&noisePan=${n(s.noisePan)}&noiseWidth=${n(s.noiseWidth)}`;
+  }
+
+  function parse(q) {
+    let parsed;
+    if (state.local) parsed = state.local.parseQuery(q, randomSeed());
+    else {
+      const { traits, seed } = state.js.parseSceneQuery(q);
+      parsed = { seed, traits: { ...traits, mood: Math.max(0, state.moods.findIndex((m) => m.value === traits.mood)) } };
+    }
+    const t = parsed.traits;
+    if (!t.useMap) {   // older settings: open at the mood's point on the map
+      [t.light, t.energy] = MOOD_POINTS[t.mood] || MOOD_POINTS[0];
+      t.noiseTone = t.brightness;
+      t.useMap = true;
+    }
+    return parsed;
+  }
+
+  const save = () => store.set(STORE, query());
+
+  function preview() {
+    if (state.local) {
+      state.scene = state.local.preview(query(), state.seed);
+    } else {
+      const { traits, seed } = state.js.parseSceneQuery(query());
+      const sc = state.js.generateScene(traits, seed);
+      state.scene = { name: sc.name, key: sc.key, mood: sc.mood, tempo: sc.tempo, chords: sc.progression.map((c) => c.label) };
+    }
+    showScene();
+  }
+
+  function showScene() {
+    const sc = state.scene;
+    if (!sc) return;
+    $('scene-meta').textContent = `${sc.key} · ${Math.round(sc.tempo)} bpm`;
+    $('scene-chords').replaceChildren(...sc.chords.map((c) => Object.assign(document.createElement('span'), { textContent: c })));
+    $('seed-label').textContent = `Seed ${state.seed.toFixed(6)}`;
+    if ('mediaSession' in navigator && 'MediaMetadata' in window) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: `${sc.key} · ${Math.round(sc.tempo)} bpm`, artist: 'in halation' });
+      } catch (e) { /* unsupported */ }
+    }
+  }
+
+  // ---- audio --------------------------------------------------------------------
+
+  async function ensureAudio() {
+    if (state.ctx) {
+      clearTimeout(state.suspendTimer);
+      await state.ctx.resume();
+      return;
+    }
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* ignore */ }
+    const ctx = new AudioContext({ latencyHint: 'playback' });
+    state.ctx = ctx;
+    const resumed = ctx.resume();
+    if (state.local) {
+      try {
+        await ctx.audioWorklet.addModule('worklet.js');
+        const node = new AudioWorkletNode(ctx, 'in-halation', { numberOfInputs: 0, outputChannelCount: [2] });
+        await new Promise((resolve, reject) => {
+          node.port.onmessage = (e) => {
+            if (e.data.type === 'ready') resolve();
+            else if (e.data.type === 'error') reject(new Error(e.data.message));
+          };
+          node.port.postMessage({ type: 'init', bytes: state.bytes.slice(0) });
+          setTimeout(() => reject(new Error('The audio worklet did not start.')), 8000);
+        });
+        node.port.onmessage = onWorkletMessage;
+        node.connect(ctx.destination);
+        state.node = node;
+        state.kind = 'wasm';
+      } catch (e) {
+        console.warn('WebAssembly worklet unavailable, using the Web Audio engine', e);
+      }
+    }
+    if (!state.kind) {
+      if (!state.js) state.js = await import('./in-halation.mjs');
+      state.engine = new state.js.NoiseEngine();
+      state.engine.context = ctx;
+      state.kind = 'js';
+    }
+    $('engine-label').textContent = `${state.kind === 'wasm' ? 'Native core · WebAssembly' : 'Web Audio engine'} · ${ctx.sampleRate / 1000} kHz`;
+    await resumed;
+  }
+
+  function onWorkletMessage(e) {
+    const m = e.data;
+    if (m.type === 'visual') {
+      state.visual = m.visual;
+      // The countdown follows the worklet's audio clock (where auto regen really runs),
+      // so it can't drift from it or wait at 0:00 while the audio is behind.
+      if (m.autoLeft >= 0 && state.autoAt) state.autoAt = Date.now() + m.autoLeft * 1000;
+    }
+    else if (m.type === 'scene') {
+      if (m.auto) {   // the worklet regenerated on its own (auto regen on the audio clock)
+        remember();
+        state.seed = m.scene.seed;
+        if (m.query && state.randomize) {   // it also randomized the settings
+          state.settings = parse(m.query).traits;
+          syncControls();
+        }
+        save();
+        state.autoAt = Date.now() + state.autoMinutes * 60000;
+      }
+      state.scene = m.scene;
+      showScene();
+    }
+    else if (m.type === 'error') status(m.message);
+  }
+
+  async function play() {
+    try {
+      await ensureAudio();
+      if (state.kind === 'wasm') {
+        state.node.port.postMessage({ type: 'play', query: query(), randomSeed: state.seed });
+      } else {
+        const { traits, seed } = state.js.parseSceneQuery(query());
+        await state.engine.play(state.js.generateScene(traits, seed), traits);
+        preview();
+      }
+      state.playing = true;
+      status('');
+      updatePlayButton();
+      armAutoRegen();
+    } catch (e) {
+      status(`Audio could not start: ${e.message}. Tap Play to try again.`);
+    }
+  }
+
+  function pause() {
+    if (!state.playing) return;
+    if (state.kind === 'wasm') state.node.port.postMessage({ type: 'pause' });
+    else state.engine.pause();
+    state.playing = false;
+    updatePlayButton();
+    armAutoRegen();
+    clearTimeout(state.suspendTimer);
+    state.suspendTimer = setTimeout(() => { if (!state.playing) state.ctx.suspend(); }, 3000);
+  }
+
+  function setVolume(v) {
+    if (!state.playing) return;
+    if (state.kind === 'wasm') state.node.port.postMessage({ type: 'volume', value: v });
+    else state.engine.setGain(v);
+  }
+
+  // Auto regen: a new seed every N minutes while playing (crossfades like Regen).
+  // The countdown restarts whenever the scene changes.
+  // With the WebAssembly engine the countdown runs in the worklet, on the audio clock,
+  // because phones freeze a hidden page's timers but keep the audio running; the page
+  // only shows the countdown. The JS fallback uses a timer and catches up on return.
+  function armAutoRegen() {
+    clearTimeout(state.autoTimer);
+    state.autoAt = 0;
+    const seconds = state.playing && state.autoMinutes ? state.autoMinutes * 60 : 0;
+    if (state.kind === 'wasm' && state.node) {
+      state.node.port.postMessage({ type: 'randomize', value: state.randomize });
+      state.node.port.postMessage({ type: 'autoRegen', seconds });
+    }
+    if (!seconds) return;
+    state.autoAt = Date.now() + seconds * 1000;
+    if (state.kind !== 'wasm') state.autoTimer = setTimeout(regen, seconds * 1000);
+  }
+  // Back from the background: wake the audio if the phone suspended it, and catch up on a
+  // regen the frozen timer missed (JS fallback).
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !state.ctx) return;
+    if (state.playing && state.ctx.state !== 'running') state.ctx.resume().catch(() => {});
+    if (state.kind !== 'wasm' && state.playing && state.autoAt && Date.now() >= state.autoAt) regen();
+  });
+  function showAutoCountdown() {
+    const el = $('auto-next');
+    if (!state.autoAt) { if (el.textContent) el.textContent = ''; return; }
+    const left = Math.max(0, Math.round((state.autoAt - Date.now()) / 1000));
+    const text = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    if (el.textContent !== text) el.textContent = text;
+  }
+
+  // Back: the scenes before each Regen and Auto regen (seed and settings), newest last.
+  const history = [];
+  function remember() {
+    history.push(query());
+    if (history.length > 20) history.shift();
+    $('back-btn').disabled = false;
+  }
+  function back() {
+    const q = history.pop();
+    $('back-btn').disabled = !history.length;
+    if (!q) return;
+    const parsed = parse(q);
+    state.settings = parsed.traits;
+    state.seed = parsed.seed;
+    syncControls();
+    setVolume(state.settings.volume);
+    if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
+    save();
+    preview();
+    if (state.playing) play();
+  }
+
+  function regen() {
+    remember();
+    state.seed = randomSeed();
+    // Randomize all: every sound setting gets a random value (the core picks them, from the
+    // seed; Volume is kept). Needs the WebAssembly core.
+    if (state.randomize && state.local) {
+      state.settings = parse(state.local.randomizeQuery(query(), state.seed)).traits;
+      syncControls();
+      if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
+    }
+    save();
+    preview();
+    if (state.playing) play();
+  }
+
+  function soundChanged() {
+    save();
+    preview();
+    if (!state.playing) return;
+    clearTimeout(state.pending);
+    state.pending = setTimeout(play, 450);
+  }
+
+  function updatePlayButton() {
+    $('play-text').textContent = state.playing ? 'Pause' : 'Play';
+    $('play-icon').innerHTML = state.playing
+      ? '<path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z"/>'
+      : '<path d="M8 5.5v13l11-6.5z"/>';
+    try { navigator.mediaSession.playbackState = state.playing ? 'playing' : 'paused'; } catch (e) { /* ignore */ }
+  }
+
+  // ---- panel ----------------------------------------------------------------------
+
+  // One-time hints for people new to the app (stored, so each shows once).
+  const HINT_STORE = 'in-halation.hints';
+  const hints = (() => { try { return JSON.parse(store.get(HINT_STORE) || '{}'); } catch (e) { return {}; } })();
+  function hintDone(name) {
+    if (hints[name]) return;
+    hints[name] = true;
+    store.set(HINT_STORE, JSON.stringify(hints));
+    if (name === 'map') $('hint-start').hidden = true;
+  }
+
+  function setPanel(open) {
+    if (!open && !hints.toast) {   // the first close: say how to get the controls back
+      hintDone('toast');
+      const t = $('toast');
+      t.hidden = false;
+      t.style.opacity = '1';
+      setTimeout(() => { t.style.opacity = '0'; setTimeout(() => { t.hidden = true; }, 450); }, 2600);
+    }
+    $('panel').classList.toggle('open', open);
+    $('handle').hidden = open;
+    $('handle').setAttribute('aria-expanded', String(open));
+    if (!open && document.activeElement && $('panel').contains(document.activeElement)) $('handle').focus();
+  }
+  const panelOpen = () => $('panel').classList.contains('open');
+
+  function setViz(mode) {
+    state.viz = mode;
+    store.set(VIZ_STORE, String(VIEWS.indexOf(mode)));
+    $('viz-shapes').setAttribute('aria-checked', String(mode === 'shapes'));
+    for (const m of ['traces', 'columns', 'weave', 'none']) $(`viz-${m}`).setAttribute('aria-checked', String(mode === m));
+    clearLayer();
+  }
+
+  // Slider value text: Pan shows L/C/R; the others show two decimals.
+  function fmt(key, v) {
+    if (key !== 'noisePan') return v.toFixed(2);
+    const d = Math.round((v - 0.5) * 200);
+    return d === 0 ? 'C' : d < 0 ? `L${-d}` : `R${d}`;
+  }
+
+  function buildControls() {
+    buildMoodMap();
+    document.querySelectorAll('.row[data-key]').forEach((row) => {
+      const key = row.dataset.key;
+      const ends = ENDS[key];
+      row.classList.toggle('worded', !!ends);
+      row.innerHTML = `<div class="row-top"><label for="${key}" data-info="${INFO[key]}">${LABELS[key]}</label><output id="${key}-out" for="${key}"></output></div>
+        <input type="range" id="${key}" min="0" max="${key === 'volume' ? 1.5 : 1}" step="0.01">` +
+        (ends ? `<div class="ends" aria-hidden="true"><span>${ends[0]}</span><span>${ends[1]}</span></div>` : '');
+      row.querySelector('input').addEventListener('input', (e) => {
+        state.settings[key] = Number(e.target.value);
+        $(`${key}-out`).textContent = fmt(key, state.settings[key]);
+        if (key === 'volume') { setVolume(state.settings.volume); save(); } else soundChanged();
+      });
+    });
+    // Octave steppers: sound bed 1..6, motifs 1..7; low and high push each other.
+    const step = (key, delta) => {
+      const s = state.settings;
+      const motif = key.startsWith('motif');
+      const low = motif ? 'motifOctaveLow' : 'padOctaveLow', high = motif ? 'motifOctaveHigh' : 'padOctaveHigh';
+      s[key] = Math.min(motif ? 7 : 6, Math.max(1, s[key] + delta));
+      if (s[low] > s[high]) key === low ? (s[high] = s[low]) : (s[low] = s[high]);
+      syncControls();
+      soundChanged();
+    };
+    $('mlow-down').addEventListener('click', () => step('motifOctaveLow', -1));
+    $('mlow-up').addEventListener('click', () => step('motifOctaveLow', 1));
+    $('mhigh-down').addEventListener('click', () => step('motifOctaveHigh', -1));
+    $('mhigh-up').addEventListener('click', () => step('motifOctaveHigh', 1));
+    $('low-down').addEventListener('click', () => step('padOctaveLow', -1));
+    $('low-up').addEventListener('click', () => step('padOctaveLow', 1));
+    $('high-down').addEventListener('click', () => step('padOctaveHigh', -1));
+    $('high-up').addEventListener('click', () => step('padOctaveHigh', 1));
+    $('revoice').addEventListener('change', (e) => { state.settings.padRevoice = e.target.checked; soundChanged(); });
+    // Transition ids: 0 portamento (Glide), 1 stepped (Steps).
+    [0, 1].forEach((mode) => $(`transition-${mode}`).addEventListener('click', () => {
+      state.settings.padTransition = mode;
+      syncControls();
+      soundChanged();
+    }));
+    // Sweep ids: 0 off, 1 slow, 2 fast, 3 medium (ids are stable, not an order).
+    [0, 1, 2, 3].forEach((mode) => $(`sweep-${mode}`).addEventListener('click', () => {
+      state.settings.noiseSweep = mode;          // live: no new scene, no crossfade
+      syncControls();
+      save();
+      if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: mode });
+      syncSweepControls();
+    }));
+    $('back-btn').addEventListener('click', back);
+    $('hint-start').hidden = !!hints.map;
+    // Reset one section to its defaults (the seed and the other sections stay).
+    const SECTION_KEYS = {
+      mix: ['volume', 'motifLevel', 'padLevel', 'noiseLevel'],
+      motifs: ['motifDensity', 'motifNoteLength', 'motifArticulation', 'phraseSoftness', 'motifOctaveLow', 'motifOctaveHigh', 'motifReverb', 'motifGrit'],
+      pad: ['padLength', 'padDrift', 'padWidth', 'padOctaveLow', 'padOctaveHigh', 'padOverlap', 'padRevoice', 'padTransition'],
+      noise: ['noiseSweep', 'noiseTone', 'noisePan', 'noiseWidth'],
+    };
+    document.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', () => {
+      const defaults = parse('light=0.6').traits;
+      for (const key of SECTION_KEYS[b.dataset.reset]) state.settings[key] = defaults[key];
+      syncControls();
+      setVolume(state.settings.volume);
+      if (b.dataset.reset === 'noise' && state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
+      soundChanged();
+    }));
+    // Touch screens have no hover: a tap on a label shows what the setting does (a tap
+    // anywhere else hides it).
+    document.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
+      const label = e.target.closest && e.target.closest('[data-info]');
+      document.querySelectorAll('.show-info').forEach((el) => { if (el !== label) el.classList.remove('show-info'); });
+      if (label) label.classList.toggle('show-info');
+    });
+    $('reset-btn').addEventListener('click', () => {
+      const keep = state.seed;
+      state.settings = parse('').traits;
+      state.seed = keep;
+      syncControls();
+      setVolume(state.settings.volume);
+      soundChanged();
+    });
+    // Share: the system share sheet where there is one, else the link is copied.
+    $('share-btn').addEventListener('click', async () => {
+      const url = shareLink(), btn = $('share-btn');
+      if (navigator.share) {
+        try { await navigator.share({ title: 'in halation', url }); return; }
+        catch (e) { if (e.name === 'AbortError') return; }
+      }
+      try { await navigator.clipboard.writeText(url); btn.textContent = 'Link copied'; }
+      catch (e) { btn.textContent = 'Copy blocked'; }
+      setTimeout(() => { btn.textContent = 'Share'; }, 1600);
+    });
+    $('settings-form').addEventListener('submit', (e) => e.preventDefault());
+    $('viz-shapes').addEventListener('click', () => setViz('shapes'));
+    $('viz-traces').addEventListener('click', () => setViz('traces'));
+    $('viz-columns').addEventListener('click', () => setViz('columns'));
+    $('viz-weave').addEventListener('click', () => setViz('weave'));
+    $('viz-none').addEventListener('click', () => setViz('none'));
+    buildDisplayControls();
+    // Screen readers: give each control its label's hover info as a description.
+    document.querySelectorAll('[data-info]').forEach((el) => {
+      const label = el.closest('label');
+      const control = label ? label.control : null;
+      if (control) control.setAttribute('aria-description', el.dataset.info);
+    });
+  }
+
+  // ---- peek -----------------------------------------------------------------------
+  // On a phone the panel covers most of the screen. While a View control is in use
+  // (a slider held, a swatch or pill tapped, a color picked), the panel goes see-through
+  // and only that control's row stays; a tap keeps the peek for a moment.
+  const narrow = matchMedia('(max-width: 899px)');
+  let peekRow = null, peekTimer = 0, peekHeld = false;
+  function peekStart(target, hold) {
+    if (!narrow.matches || !panelOpen()) return;
+    const row = target.closest('#view-group > .auto, #view-group > .row, #view-group > .switch, #light-color-rows, .theme-rows > .auto, #view-group > .seg');
+    if (!row) return;
+    clearTimeout(peekTimer);
+    if (peekRow && peekRow !== row) peekRow.classList.remove('peek-keep');
+    peekRow = row;
+    row.classList.add('peek-keep');
+    $('panel').classList.add('peek');
+    peekHeld = hold;
+    if (!hold) peekTimer = setTimeout(peekEnd, 1200);
+  }
+  function peekEnd() {
+    clearTimeout(peekTimer);
+    peekHeld = false;
+    $('panel').classList.remove('peek');
+    if (peekRow) peekRow.classList.remove('peek-keep');
+    peekRow = null;
+  }
+  function buildPeek() {
+    const group = $('view-group');
+    // Sliders: held while the finger is down.
+    group.addEventListener('pointerdown', (e) => { if (e.target.matches('input[type="range"]')) peekStart(e.target, true); });
+    addEventListener('pointerup', () => { if (peekHeld) { peekHeld = false; peekTimer = setTimeout(peekEnd, 600); } });
+    addEventListener('pointercancel', () => { if (peekHeld) peekEnd(); });
+    // Taps and pickers: a short peek after each change.
+    group.addEventListener('click', (e) => { if (e.target.closest('button')) peekStart(e.target, false); });
+    group.addEventListener('input', (e) => { if (!peekHeld) peekStart(e.target, false); });
+  }
+
+  // Appearance of the interface: System (default), Light or Dark; remembered.
+  const APPEARANCE_STORE = 'in-halation.appearance';
+  function setAppearance(value) {
+    if (value === 'light' || value === 'dark') document.documentElement.dataset.appearance = value;
+    else delete document.documentElement.dataset.appearance;
+    store.set(APPEARANCE_STORE, value);
+    for (const v of ['system', 'light', 'dark']) $(`appearance-${v}`).setAttribute('aria-checked', String(v === value));
+  }
+
+  function buildDisplayControls() {
+    const box = $('swatches');
+    COLORS.forEach(([name, hex]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'swatch';
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-label', name);
+      b.dataset.color = hex;
+      b.style.background = hex;
+      b.addEventListener('click', () => setDisplay({ color: hex, rainbow: false, ...linesIfCustom(hex) }));
+      box.append(b);
+    });
+    const rainbow = document.createElement('button');
+    rainbow.type = 'button';
+    rainbow.className = 'swatch rainbow';
+    rainbow.id = 'rainbow';
+    rainbow.setAttribute('role', 'radio');
+    rainbow.setAttribute('aria-label', 'Rainbow: a random color for each voice');
+    rainbow.addEventListener('click', () => { if (state.display.theme !== 2) setDisplay({ rainbow: true, ...linesIfCustom('rainbow') }); });
+    box.append(rainbow);
+    const custom = document.createElement('label');
+    custom.className = 'custom';
+    custom.setAttribute('role', 'radio');
+    custom.title = 'Custom color';
+    custom.innerHTML = '+<input type="color" id="custom-color" aria-label="Custom color">';
+    custom.querySelector('input').addEventListener('input', (e) => setDisplay({ color: e.target.value, rainbow: false, ...linesIfCustom(e.target.value) }));
+    box.append(custom);
+    // Noise: Off, or a style (stored as `noise` on/off and `noiseStyle`: 0 Grain, 1 Flock)
+    [0, 1, 2].forEach((particles) => $(`particles-${particles}`).addEventListener('click', () => setDisplay({ particles })));
+    $('cycle').addEventListener('change', (e) => setDisplay({ colorCycle: e.target.checked }));
+    [0, 1, 2].forEach((theme) => $(`bg-${theme}`).addEventListener('click', () =>
+      setDisplay(theme === 2 ? { theme, rainbow: false } : { theme })));
+    // Custom theme: the first time, it starts from the current theme's colors.
+    $('bg-3').addEventListener('click', () => setDisplay(state.display.themeBackground ? { theme: 3 } : { theme: 3, ...themeFromCurrent() }));
+    $('theme-bg').querySelector('input').addEventListener('input', (e) => setDisplay({ themeBackground: e.target.value }));
+    $('theme-lines').querySelector('input').addEventListener('input', (e) => setDisplay({ themeLines: e.target.value }));
+    $('theme-lines-rainbow').addEventListener('click', () => setDisplay({ themeLines: 'rainbow' }));
+    $('theme-glow').querySelector('input').addEventListener('input', (e) => setDisplay({ themeGlow: e.target.value }));
+    $('theme-glow-same').addEventListener('click', () => setDisplay({ themeGlow: 'lines' }));
+    $('theme-glow-rainbow').addEventListener('click', () => setDisplay({ themeGlow: 'rainbow' }));
+    $('cycle-speed').addEventListener('input', (e) => setDisplay({ colorCycleSeconds: cycleSecondsFor(Number(e.target.value)) }));
+    $('glow').addEventListener('input', (e) => setDisplay({ glow: Number(e.target.value) }));
+    $('burn').addEventListener('input', (e) => setDisplay({ burnIn: Number(e.target.value) }));
+    syncDisplay();
+    buildPeek();
+    for (const v of ['system', 'light', 'dark']) $(`appearance-${v}`).addEventListener('click', () => setAppearance(v));
+    setAppearance(['light', 'dark'].includes(store.get(APPEARANCE_STORE)) ? store.get(APPEARANCE_STORE) : 'system');
+  }
+
+  // In the Custom theme the Color swatches set the line color too.
+  const linesIfCustom = (value) => (state.display.theme === 3 ? { themeLines: value } : {});
+
+  function setDisplay(change) {
+    // A new color, or turning the cycle on, starts the drift at the chosen color.
+    if ('color' in change || 'rainbow' in change || 'themeLines' in change || 'themeGlow' in change ||
+        (change.colorCycle && !state.display.colorCycle)) cyclePhase = 0;
+    Object.assign(state.display, change);
+    store.set(DISPLAY_STORE, JSON.stringify(state.display));
+    syncDisplay();
+  }
+
+  function syncDisplay() {
+    const d = state.display;
+    if (![0, 1, 2, 3].includes(d.theme)) d.theme = 0;
+    if (d.theme === 2 && d.rainbow) d.rainbow = false;   // a Color background turns Rainbow off
+    const preset = COLORS.find(([, hex]) => hex === d.color.toLowerCase());
+    document.querySelectorAll('.swatch[data-color]').forEach((b) =>
+      b.setAttribute('aria-checked', String(!d.rainbow && b.dataset.color === d.color.toLowerCase())));
+    $('rainbow').setAttribute('aria-checked', String(!!d.rainbow));
+    $('rainbow').disabled = d.theme === 2;
+    [0, 1, 2, 3].forEach((id) => $(`bg-${id}`).setAttribute('aria-checked', String(d.theme === id)));
+    document.body.classList.toggle('bg-light', d.theme === 1);
+    document.body.classList.toggle('bg-color', d.theme === 2);
+    // Custom theme rows replace the light color swatches.
+    const custom3 = d.theme === 3 && !!phosphor;
+    $('theme-rows').hidden = !custom3;
+    if (custom3) {
+      const pick = (id, hex, on) => {
+        const el = $(id);
+        el.setAttribute('aria-checked', String(on));
+        el.style.background = on ? hex : 'none';
+        el.querySelector('input').value = hex;
+      };
+      const linesHex = d.themeLines === 'rainbow' ? '#ffffff' : d.themeLines;
+      const glowHex = d.themeGlow === 'rainbow' || d.themeGlow === 'lines' ? linesHex : d.themeGlow;
+      pick('theme-bg', d.themeBackground, true);
+      pick('theme-lines', linesHex, d.themeLines !== 'rainbow');
+      $('theme-lines-rainbow').setAttribute('aria-checked', String(d.themeLines === 'rainbow'));
+      pick('theme-glow', glowHex, d.themeGlow !== 'rainbow' && d.themeGlow !== 'lines');
+      $('theme-glow-same').setAttribute('aria-checked', String(d.themeGlow === 'lines'));
+      $('theme-glow-rainbow').setAttribute('aria-checked', String(d.themeGlow === 'rainbow'));
+    }
+    document.body.classList.toggle('theme-pale', custom3 && luminance(hexRgb(d.themeBackground)) > 0.5);
+    const custom = document.querySelector('.custom');
+    custom.setAttribute('aria-checked', String(!d.rainbow && !preset));
+    custom.style.background = preset ? 'none' : d.color;
+    $('custom-color').value = d.color;
+    $('color-out').textContent = d.rainbow ? 'Rainbow' : preset ? preset[0] : d.color;
+    $('cycle').checked = !!d.colorCycle;
+    $('cycle-row').hidden = !d.colorCycle;
+    $('cycle-speed').value = cycleSliderFor(d.colorCycleSeconds);
+    $('cycle-out').textContent = cycleText(d.colorCycleSeconds);
+    $('glow').value = d.glow;
+    $('glow-out').textContent = d.glow.toFixed(2);
+    if (![0, 1, 2].includes(d.particles)) d.particles = 2;
+    [0, 1, 2].forEach((id) => $(`particles-${id}`).setAttribute('aria-checked', String(d.particles === id)));
+    $('burn').value = d.burnIn;
+    $('burn-out').textContent = d.burnIn.toFixed(2);
+    const hex = d.color.replace('#', '');
+    // A 00 channel stays 0 (only an unreadable channel falls back to white).
+    ink.base = [0, 2, 4].map((i) => { const v = parseInt(hex.slice(i, i + 2), 16); return Number.isNaN(v) ? 255 : v; });
+    ink.baseHue = hueOf(ink.base);
+    ink.rgb = ink.base.join(',');
+  }
+
+  // Trace height: 16 px on an 852-pt-tall iPhone, scaled to the device's screen height.
+  const TRACE_HEIGHT = 16 / 852;
+  const screenHeight = () => screen.height || innerHeight;
+
+  // Light color for every visualization.
+  const ink = (alpha) => `rgba(${ink.rgb},${Math.max(0, Math.min(1, alpha))})`;
+  ink.rgb = '255,255,255';
+  ink.base = [255, 255, 255];
+  ink.baseHue = 0;
+
+  // Cycled and rainbow colors have the softness of the preset swatches.
+  const PASTEL = { s: 1, l: 0.75 };
+  function hslRgb(h, s = PASTEL.s, l = PASTEL.l) {
+    const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+    const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return [f(0), f(8), f(4)].map((v) => Math.round(v * 255));
+  }
+  function hueOf([r, g, b]) {
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    if (!d) return 0;
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (h * 60 + 360) % 360;
+  }
+
+  const hexRgb = (hex) => { const h = hex.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) || 0); };
+  const rgbHex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+  const luminance = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  // HSL of an RGB color (0..255): [hue degrees, saturation, lightness].
+  function hsl([r, g, b]) {
+    const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255, l = (max + min) / 2;
+    const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+    return [hueOf([r, g, b]), s, l];
+  }
+  // Auto cycle in the Custom theme: line and glow colors keep their saturation and
+  // lightness and turn their hue.
+  function turnHue(c, degrees) {
+    const [h, s, l] = hsl(c);
+    return hslRgb(h + degrees, s, l);
+  }
+
+  // Custom theme seeded from the current theme: the colors it shows now.
+  function themeFromCurrent() {
+    const d = state.display;
+    if (d.theme === 1) {
+      const [h, s, l] = hsl(ink.base);
+      return { themeBackground: '#ffffff', themeLines: d.rainbow ? 'rainbow' : rgbHex(hslRgb(h, s, 1 - l)), themeGlow: 'lines' };
+    }
+    if (d.theme === 2) return { themeBackground: d.color, themeLines: '#000000', themeGlow: 'lines' };
+    return { themeBackground: '#000000', themeLines: d.rainbow ? 'rainbow' : d.color, themeGlow: 'lines' };
+  }
+
+  // Rainbow hues are drawn for the Rainbow light color, or in the Custom theme when the
+  // lines or the glow are Rainbow.
+  function rainbowOn() {
+    const d = state.display;
+    return d.theme === 3 && phosphor ? d.themeLines === 'rainbow' || d.themeGlow === 'rainbow' : !!d.rainbow;
+  }
+
+  // The Custom theme's colors this frame (0..1), with Auto cycle turning line and glow hues.
+  function themeParams() {
+    const d = state.display, turn = d.colorCycle ? cyclePhase * 360 : 0;
+    const color = (hex) => turnHue(hexRgb(hex), turn).map((v) => v / 255);
+    const linesRainbow = d.themeLines === 'rainbow';
+    const lines = linesRainbow ? [1, 1, 1] : color(d.themeLines);
+    const glowRainbow = d.themeGlow === 'rainbow' || (d.themeGlow === 'lines' && linesRainbow);
+    const glow = d.themeGlow === 'lines' || d.themeGlow === 'rainbow' ? lines : color(d.themeGlow);
+    return { bg: hexRgb(d.themeBackground).map((v) => v / 255), lines, glow, linesRainbow, glowRainbow,
+             strength: [0.2 + 0.75 * d.glow, 0.15 + 0.8 * d.glow, 0.1 + 0.25 * d.glow], dpr };
+  }
+
+  const tint = $('viz-tint');
+
+  // Light background: the canvas is inverted, so to show a color we draw its
+  // complement. The shown color keeps the hue and flips the lightness: white shows as
+  // black, amber as a dark amber.
+  function invertedInk([r, g, b]) {
+    const max = Math.max(r, g, b) / 255, min = Math.min(r, g, b) / 255, l = (max + min) / 2;
+    const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+    return hslRgb(hueOf([r, g, b]), s, 1 - l).map((v) => 255 - v);
+  }
+  let tintColor = '';   // last color set on the tint layer and page background
+
+  // Auto cycle: a phase (0 … 1 per turn) that advances with time, so a speed change
+  // doesn't jump. Single color: the light's hue drifts from the chosen color's hue.
+  let cyclePhase = 0;
+  function stepColor(dt) {
+    const d = state.display;
+    if (d.colorCycle) cyclePhase = (cyclePhase + dt / Math.max(CYCLE_MIN, d.colorCycleSeconds)) % 1;
+    const c = d.colorCycle && !d.rainbow ? hslRgb(ink.baseHue + cyclePhase * 360) : ink.base;
+    if (d.theme === 3 && phosphor) {   // Custom: light drawn white (or in rainbow hues); colored in the composite
+      ink.rgb = '255,255,255';
+      if (tintColor !== d.themeBackground) { tintColor = d.themeBackground; document.body.style.background = d.themeBackground; }
+    } else if (d.theme === 1) {   // dark on white: draw the complement of the lightness-flipped color
+      ink.rgb = invertedInk(c).join(',');
+      if (tintColor) { tintColor = ''; document.body.style.background = ''; }
+    } else if (d.theme === 2) {   // the color is the background; the lines are drawn white (shown black)
+      ink.rgb = '255,255,255';
+      const bg = `rgb(${c.join(',')})`;
+      if (bg !== tintColor) { tintColor = bg; tint.style.backgroundColor = bg; document.body.style.background = bg; }
+    } else {
+      ink.rgb = c.join(',');
+      if (tintColor) { tintColor = ''; document.body.style.background = ''; }
+    }
+  }
+
+  // Rainbow: each node keeps the random hue it got when it appeared. Voices have no id,
+  // so nodes are matched frame to frame: same kind and pan, nearest pitch (glides move
+  // a little each frame). Unmatched nodes are new; tracks unseen for 0.5 s are dropped.
+  const tracks = [];
+  function assignHues(list, now) {
+    const used = new Set();
+    for (const n of list) {
+      const m = 69 + 12 * Math.log2(Math.max(n.frequency, 1) / 440);
+      let best = null, bestDist = 3;   // semitones
+      for (const t of tracks) {
+        if (used.has(t) || t.touch !== n.touch || Math.abs(t.pan - n.pan) > 0.001) continue;
+        const dist = Math.abs(t.m - m);
+        if (dist < bestDist) { best = t; bestDist = dist; }
+      }
+      if (!best) { best = { touch: n.touch, pan: n.pan, hue: Math.random() * 360 }; tracks.push(best); }
+      used.add(best);
+      best.m = m;
+      best.seen = now;
+      n.hue = best.hue;
+    }
+    for (let i = tracks.length - 1; i >= 0; i--) if (now - tracks[i].seen > 500) tracks.splice(i, 1);
+  }
+
+  // The light for one node (or bird with its own hue): its rainbow hue, or the shared ink.
+  function light(n, alpha) {
+    if (!rainbowOn() || n.hue === undefined) return ink(alpha);
+    const hue = hslRgb(n.hue + (state.display.colorCycle ? cyclePhase * 360 : 0));
+    const c = state.display.theme === 1 ? invertedInk(hue) : hue;   // on white: the same hue, drawn dark
+    return `rgba(${c[0]},${c[1]},${c[2]},${Math.max(0, Math.min(1, alpha))})`;
+  }
+
+  // While Sweep is on, the swept sliders are read-only and show the
+  // values the engine is sweeping through; when it's off they return to the set values.
+  // Sweep moves the noise bed only: its tone, pan and width (not its level). Same depths
+  // as the engine: tone ±0.4, pan ±0.3 (±0.6 of the −1..1 centre), width ±0.5.
+  const SWEPT = ['noiseTone', 'noisePan', 'noiseWidth'];
+  function syncSweepControls() {
+    const on = !!state.settings.noiseSweep;
+    for (const key of SWEPT) {
+      $(key).disabled = on;
+      $(key).closest('.row').classList.toggle('swept', on);
+      if (!on) {
+        $(key).value = state.settings[key];
+        $(`${key}-out`).textContent = fmt(key, state.settings[key]);
+      }
+    }
+  }
+  function animateSweepControls(v) {
+    if (!state.settings.noiseSweep || !v || !panelOpen()) return;
+    const s = state.settings;
+    const shown = {
+      noiseTone: Math.min(1, Math.max(0, s.noiseTone + 0.4 * (v.sweep || 0))),
+      noisePan: Math.min(1, Math.max(0, s.noisePan + 0.3 * (v.sweepNoise || 0))),
+      noiseWidth: Math.min(1, Math.max(0, s.noiseWidth + 0.5 * (v.sweepRes || 0))),
+    };
+    for (const key of SWEPT) {
+      $(key).value = shown[key];
+      const text = fmt(key, shown[key]);
+      if ($(`${key}-out`).textContent !== text) $(`${key}-out`).textContent = text;
+    }
+  }
+
+  // ---- mood map -------------------------------------------------------------------
+  // Drag (or use the arrow keys) to set light (x) and energy (y). Each change previews
+  // the scene; while playing, the usual debounce crossfades once the dot settles.
+
+  function buildMoodMap() {
+    const map = $('mood-map');
+    const setFrom = (e) => {
+      const r = map.getBoundingClientRect();
+      setMood((e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height);
+    };
+    map.addEventListener('pointerdown', (e) => { map.setPointerCapture(e.pointerId); setFrom(e); hintDone('map'); });
+    map.addEventListener('pointermove', (e) => { if (map.hasPointerCapture(e.pointerId)) setFrom(e); });
+    map.addEventListener('keydown', (e) => {
+      const step = e.shiftKey ? 0.1 : 0.02;
+      const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      setMood(state.settings.light + d[0], state.settings.energy + d[1]);
+    });
+  }
+
+  function setMood(light, energy) {
+    const s = state.settings;
+    const clamp = (v) => Math.round(Math.min(1, Math.max(0, v)) * 1000) / 1000;
+    if (clamp(light) === s.light && clamp(energy) === s.energy) return;
+    s.light = clamp(light);
+    s.energy = clamp(energy);
+    syncMoodMap();
+    soundChanged();
+  }
+
+  function syncMoodMap() {
+    const s = state.settings;
+    const dot = $('map-dot');
+    dot.style.left = `${s.light * 100}%`;
+    dot.style.top = `${(1 - s.energy) * 100}%`;
+    const k = scaleIndex(s.light);
+    const calm = s.energy < 0.34 ? 'calm' : s.energy < 0.67 ? 'moving' : 'active';
+    $('map-readout').textContent = `${SCALES[k]} · ${calm}, about ${Math.round(42 + 70 * s.energy)} bpm`;
+  }
+
+  function syncControls() {
+    const s = state.settings;
+    syncMoodMap();
+    Object.keys(LABELS).forEach((key) => {
+      $(key).value = s[key];
+      $(`${key}-out`).textContent = fmt(key, s[key]);
+    });
+    $('padOctaveLow-out').textContent = s.padOctaveLow;
+    $('padOctaveHigh-out').textContent = s.padOctaveHigh;
+    $('motifOctaveLow-out').textContent = s.motifOctaveLow;
+    $('motifOctaveHigh-out').textContent = s.motifOctaveHigh;
+    $('revoice').checked = s.padRevoice;
+    [0, 1].forEach((mode) => $(`transition-${mode}`).setAttribute('aria-checked', String((s.padTransition || 0) === mode)));
+    [0, 1, 2, 3].forEach((mode) => $(`sweep-${mode}`).setAttribute('aria-checked', String((s.noiseSweep || 0) === mode)));
+    syncSweepControls();
+  }
+
+  // ---- visualizations ---------------------------------------------------------------
+  // All three draw white light into a phosphor layer that decays a little each frame,
+  // then share one composite: the layer, two blurred copies (a close glow and a wide
+  // fuzzy halo, like an old oscilloscope) and a faint offset sheen.
+
+  const canvas = $('viz');
+  const g = canvas.getContext('2d');
+  const layer = document.createElement('canvas');   // this frame's light only (cleared every frame)
+  const lg = layer.getContext('2d');
+  const glowA = document.createElement('canvas');   // 1/6 size: close glow
+  const ga = glowA.getContext('2d');
+  const glowB = document.createElement('canvas');   // 1/24 size: wide halo
+  const gb = glowB.getContext('2d');
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let dpr = 1, lastFrame = 0;
+
+  // ---- phosphor buffer --------------------------------------------------------------
+  // Burn-in accumulates in WebGL: each frame the old light is scaled down AND a small
+  // constant is subtracted, so trails always reach true black (an 8-bit canvas fade
+  // gets stuck at a dim grey). Half-float when the GPU allows it.
+  function makePhosphor() {
+    const el = document.createElement('canvas');
+    const gl = el.getContext('webgl2', { alpha: false, antialias: false, premultipliedAlpha: false,
+                                         preserveDrawingBuffer: true });
+    if (!gl) return null;
+    const half = !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
+    const compile = (type, src) => {
+      const sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+      return sh;
+    };
+    const program = (fs) => {
+      const pr = gl.createProgram();
+      gl.attachShader(pr, compile(gl.VERTEX_SHADER,
+        '#version 300 es\nin vec2 p; out vec2 uv; void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }'));
+      gl.attachShader(pr, compile(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+      return pr;
+    };
+    try {
+      const accum = program(`#version 300 es
+        precision highp float;
+        in vec2 uv; out vec4 o;
+        uniform sampler2D prev, frame; uniform float shift, decay, floorv;
+        void main() {
+          vec2 q = vec2(uv.x + shift, uv.y);
+          vec3 old = q.x > 1.0 ? vec3(0.0) : texture(prev, q).rgb;
+          vec3 kept = old * decay;
+          // Only the faintest light gets the extra subtraction, so tails end at black
+          // without shortening the visible trail.
+          kept = mix(max(kept - floorv, 0.0), kept, step(0.06, kept));
+          vec3 c = kept + texture(frame, uv).rgb;
+          o = vec4(min(c, 1.0), 1.0);
+        }`);
+      const show = program(`#version 300 es
+        precision highp float;
+        in vec2 uv; out vec4 o; uniform sampler2D tex;
+        void main() { o = vec4(texture(tex, uv).rgb, 1.0); }`);
+      // Custom theme: the glow is blurred here (two box downsamples, as on iOS), then one
+      // pass paints background, glow and lines as layers. A layer lighter than the
+      // background adds light (screen); a darker one darkens it (multiply).
+      const down6 = program(`#version 300 es
+        precision highp float;
+        in vec2 uv; out vec4 o; uniform sampler2D src; uniform vec2 texel;
+        void main() {
+          vec3 c = vec3(0.0);
+          for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++)
+            c += texture(src, uv + vec2(float(x) * 2.0, float(y) * 2.0) * texel).rgb;
+          o = vec4(c / 9.0, 1.0);
+        }`);
+      const down4 = program(`#version 300 es
+        precision highp float;
+        in vec2 uv; out vec4 o; uniform sampler2D src; uniform vec2 texel;
+        void main() {
+          vec3 c = vec3(0.0);
+          for (int y = 0; y <= 1; y++) for (int x = 0; x <= 1; x++)
+            c += texture(src, uv + (vec2(float(x), float(y)) * 2.0 - 1.0) * texel).rgb;
+          o = vec4(c / 4.0, 1.0);
+        }`);
+      const themed = program(`#version 300 es
+        precision highp float;
+        in vec2 uv; out vec4 o;
+        uniform sampler2D base, glowA, glowB;
+        uniform vec3 strength;        // close glow, wide halo, sheen
+        uniform float sheenOffset;    // one CSS pixel, in uv
+        uniform vec3 bg, lines, glowColor;
+        uniform float linesRainbow, glowRainbow;
+        float peak(vec3 c) { return max(c.r, max(c.g, c.b)); }
+        float lum(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+        vec3 layer(vec3 under, vec3 color, float amount) {
+          return lum(color) >= lum(bg) ? 1.0 - (1.0 - under) * (1.0 - color * amount)   // screen
+                                       : under * mix(vec3(1.0), color, amount);           // multiply
+        }
+        void main() {
+          vec3 b = texture(base, uv).rgb;
+          vec3 g = texture(glowA, uv).rgb * strength.x + texture(glowB, uv).rgb * strength.y
+                 + texture(base, uv - vec2(0.0, sheenOffset)).rgb * strength.z;
+          float lineAmount = min(1.0, peak(b)), glowAmount = min(1.0, peak(g));
+          // Rainbow: the drawn hue (normalised); otherwise the chosen color.
+          vec3 lineColor = linesRainbow > 0.5 ? b / max(peak(b), 1e-4) : lines;
+          vec3 glowC = glowRainbow > 0.5 ? g / max(peak(g), 1e-4) : glowColor;
+          vec3 c = layer(bg, glowC, glowAmount);
+          c = layer(c, lineColor, lineAmount);
+          o = vec4(c, 1.0);
+        }`);
+      const quad = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      const texture = () => {
+        const t = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        return t;
+      };
+      const frameTex = texture();
+      let targets = [];
+      let glows = [];   // custom theme: 1/6 and 1/24 size
+      let current = 0;
+      const target = (w, h, linear) => {
+        const tex = texture();
+        if (linear) {
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        }
+        gl.texImage2D(gl.TEXTURE_2D, 0, half ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA,
+                      half ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+        const fb = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        return { tex, fb, w, h };
+      };
+      const allocate = (w, h) => {
+        el.width = w;
+        el.height = h;
+        [...targets, ...glows].forEach(({ tex, fb }) => { gl.deleteTexture(tex); gl.deleteFramebuffer(fb); });
+        targets = [0, 1].map(() => target(w, h, false));
+        glows = [target(Math.max(1, Math.round(w / 6)), Math.max(1, Math.round(h / 6)), true),
+                 target(Math.max(1, Math.round(w / 24)), Math.max(1, Math.round(h / 24)), true)];
+      };
+      const bindTex = (unit, tex) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex); };
+      // Downsample `src` (w × h) into `dst` with program `pr`.
+      const downsample = (pr, src, w, h, dst) => {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb);
+        gl.viewport(0, 0, dst.w, dst.h);
+        bindTex(0, src);
+        // Sample the full-size buffer with linear filtering for the bilinear taps.
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.useProgram(pr);
+        gl.uniform1i(gl.getUniformLocation(pr, 'src'), 0);
+        gl.uniform2f(gl.getUniformLocation(pr, 'texel'), 1 / w, 1 / h);
+        draw(pr);
+      };
+      const draw = (pr) => {
+        gl.useProgram(pr);
+        const loc = gl.getAttribLocation(pr, 'p');
+        gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      };
+      return {
+        canvas: el,
+        precision: half ? 'half-float' : '8-bit',
+        resize: allocate,
+        clear() { allocate(el.width, el.height); },
+        // decay: fraction kept this frame; shiftPx: scroll left (unused; Trail was removed); dt: seconds
+        // theme (Custom theme only): { bg, lines, glow: [r,g,b] 0..1, linesRainbow, glowRainbow,
+        // strength: [close, wide, sheen], dpr }; the canvas then shows the finished picture.
+        step(source, decay, shiftPx, dt, theme) {
+          const w = el.width, h = el.height;
+          gl.viewport(0, 0, w, h);
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_2D, frameTex);
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+          const from = targets[current], to = targets[1 - current];
+          gl.bindFramebuffer(gl.FRAMEBUFFER, to.fb);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, from.tex);
+          gl.useProgram(accum);
+          gl.uniform1i(gl.getUniformLocation(accum, 'prev'), 0);
+          gl.uniform1i(gl.getUniformLocation(accum, 'frame'), 1);
+          gl.uniform1f(gl.getUniformLocation(accum, 'shift'), shiftPx / w);
+          gl.uniform1f(gl.getUniformLocation(accum, 'decay'), decay);
+          // Per 60 Hz frame: a sliver of a display step with float precision; just over half
+          // a step with 8-bit, where rounding would otherwise hold faint pixels forever.
+          gl.uniform1f(gl.getUniformLocation(accum, 'floorv'), ((half ? 0.12 : 0.55) / 255) * dt * 60);
+          draw(accum);
+          current = 1 - current;
+          if (theme) {
+            downsample(down6, to.tex, w, h, glows[0]);
+            downsample(down4, glows[0].tex, glows[0].w, glows[0].h, glows[1]);
+            bindTex(0, to.tex);   // back to nearest for the accumulation pass
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.viewport(0, 0, w, h);
+            bindTex(1, glows[0].tex);
+            bindTex(2, glows[1].tex);
+            gl.useProgram(themed);
+            const u = (name) => gl.getUniformLocation(themed, name);
+            gl.uniform1i(u('base'), 0);
+            gl.uniform1i(u('glowA'), 1);
+            gl.uniform1i(u('glowB'), 2);
+            gl.uniform3fv(u('strength'), theme.strength);
+            gl.uniform1f(u('sheenOffset'), theme.dpr / h);
+            gl.uniform3fv(u('bg'), theme.bg);
+            gl.uniform3fv(u('lines'), theme.lines);
+            gl.uniform3fv(u('glowColor'), theme.glow);
+            gl.uniform1f(u('linesRainbow'), theme.linesRainbow ? 1 : 0);
+            gl.uniform1f(u('glowRainbow'), theme.glowRainbow ? 1 : 0);
+            draw(themed);
+            gl.activeTexture(gl.TEXTURE0);
+            return;
+          }
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, to.tex);
+          gl.useProgram(show);
+          gl.uniform1i(gl.getUniformLocation(show, 'tex'), 0);
+          draw(show);
+        },
+      };
+    } catch (e) {
+      console.warn('WebGL phosphor unavailable', e);
+      return null;
+    }
+  }
+  const phosphor = makePhosphor();
+
+  // Fallback without WebGL2: the old canvas fade (may leave faint grey).
+  const acc2d = document.createElement('canvas');
+  const ac = acc2d.getContext('2d');
+  function step2d(decay, shiftPx) {
+    if (shiftPx) { ac.globalCompositeOperation = 'copy'; ac.drawImage(acc2d, -shiftPx, 0); }
+    ac.globalCompositeOperation = 'destination-out';
+    ac.fillStyle = `rgba(0,0,0,${1 - decay})`;
+    ac.fillRect(0, 0, acc2d.width, acc2d.height);
+    ac.globalCompositeOperation = 'lighter';
+    ac.drawImage(layer, 0, 0);
+  }
+  const output = phosphor ? phosphor.canvas : acc2d;
+
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);   // 2x is plenty and cheaper
+    const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
+    canvas.width = layer.width = acc2d.width = w;
+    canvas.height = layer.height = acc2d.height = h;
+    if (phosphor) phosphor.resize(w, h);
+    glowA.width = Math.max(1, Math.round(w / 6));
+    glowA.height = Math.max(1, Math.round(h / 6));
+    glowB.width = Math.max(1, Math.round(w / 24));
+    glowB.height = Math.max(1, Math.round(h / 24));
+  }
+  function clearLayer() {
+    if (phosphor) phosphor.clear();
+    ac.clearRect(0, 0, acc2d.width, acc2d.height);
+  }
+
+  // Vertical axis: C of the lowest octave setting at the bottom, the top of the highest
+  // octave setting at the top, so the configured range fills the screen.
+  // Pitch axis 0..1: C of the lowest octave to the top of the highest. Sound bed voices
+  // use the Sound bed octaves; motifs and played notes (touch) use the Motifs octaves,
+  // which reach further (E1..C7). Each note keeps the axis it had when it appeared, so
+  // when the octaves change (by hand or Randomize all) a note still fading from before
+  // stays where it was until it dies. A note that fits the new range eases to it
+  // (τ 0.4 s); new notes use the new range. Voices have no id, so notes are matched frame
+  // to frame as for Rainbow: same kind and pan, nearest pitch.
+  const axisTracks = [];
+  let axisClock = 0;
+  function targetAxis(touch) {
+    const s = state.settings;
+    return touch ? [12 * ((s.motifOctaveLow ?? 1) + 1), 12 * ((s.motifOctaveHigh ?? 7) + 2)]
+      : [12 * (s.padOctaveLow + 1), 12 * (s.padOctaveHigh + 2)];
+  }
+  function placeNodes(list, dt) {
+    axisClock += dt;
+    const k = 1 - Math.exp(-dt / 0.4);
+    const used = new Set();
+    for (const n of list) {
+      const m = 69 + 12 * Math.log2(Math.max(n.frequency, 1) / 440);
+      const [lo, hi] = targetAxis(n.touch);
+      let best = null, bestDist = 3;   // semitones
+      for (const t of axisTracks) {
+        if (used.has(t) || t.touch !== n.touch || Math.abs(t.pan - n.pan) > 0.001) continue;
+        const d = Math.abs(t.m - m);
+        if (d < bestDist) { best = t; bestDist = d; }
+      }
+      if (!best) { best = { touch: n.touch, pan: n.pan, lo, hi }; axisTracks.push(best); }
+      else if (m >= lo && m <= hi) { best.lo += (lo - best.lo) * k; best.hi += (hi - best.hi) * k; }
+      used.add(best);
+      best.m = m;
+      best.seen = axisClock;
+      n.t = Math.min(1, Math.max(0, (m - best.lo) / (best.hi - best.lo)));
+    }
+    for (let i = axisTracks.length - 1; i >= 0; i--) if (axisClock - axisTracks[i].seen > 0.5) axisTracks.splice(i, 1);
+  }
+  const yFor = (n, h) => h * (0.9 - 0.8 * n.t);
+  const xFor = (pan, w) => w * (0.5 + pan * 0.42);
+
+  function currentVisual() {
+    if (state.kind === 'js' && state.engine) return state.engine.getVisualState();
+    return state.visual;
+  }
+
+  // Every voice and phrase, phrases flagged; quiet ones skipped.
+  function nodes(v) {
+    if (!v) return [];
+    const out = [];
+    for (const s of v.voices) if (s.amplitude >= 0.002) out.push({ ...s, touch: false });
+    for (const t of v.touches) if (t.amplitude >= 0.002) out.push({ ...t, roughness: 0.3, touch: true });
+    return out;
+  }
+
+  // Burn-in sets each view's fade rate (per second): `atZero` at 0, `atOne` at 1, then
+  // above 1 the rate keeps falling, to 40% of `atOne` at the 1.25 maximum.
+  function burnRate(atZero, atOne) {
+    const b = state.display.burnIn;
+    const rate = atZero - (atZero - atOne) * Math.min(1, b);
+    return b > 1 ? rate * (1 - (b - 1) * 2.4) : rate;
+  }
+
+  // Each view draws only this frame's light; persistence happens in the phosphor buffer.
+  let persist = { decay: 0, shift: 0 };
+  // This frame's lines, for the birds to keep away from: rings (center, radius) and
+  // straight traces (h: a row at y = p; v: a column at x = p), with a weight 0..1 by how
+  // bright the line is.
+  const obstacles = [];
+  function begin(decayPerSecond, shift = 0, dt) {
+    obstacles.length = 0;
+    lg.setTransform(1, 0, 0, 1, 0, 0);
+    lg.globalCompositeOperation = 'source-over';
+    lg.clearRect(0, 0, layer.width, layer.height);
+    lg.globalCompositeOperation = 'lighter';
+    lg.lineCap = 'round';
+    lg.lineJoin = 'round';
+    persist = { decay: Math.max(0, 1 - decayPerSecond * dt), shift };
+  }
+
+  // Start a waveform at a rising crossing, like a scope trigger, so it holds still.
+  function trigger(wave, span) {
+    for (let i = 0; i + span < wave.length; i++) if (wave[i] < 0.5 && wave[i + 1] >= 0.5) return i;
+    return 0;
+  }
+
+  // Shapes: a ring per node, its edge shaped by the waveform.
+  function drawShapes(list, dt) {
+    begin(burnRate(26, 4), 0, dt);
+    const W = layer.width, H = layer.height, base = Math.min(W, H);
+    for (const n of list) {
+      const x = xFor(n.pan, W), y = yFor(n, H);
+      const r = (6 * dpr + n.amplitude * base * 0.22) * (n.touch ? 0.55 : 1);
+      const pts = n.waveform.length;
+      lg.beginPath();
+      for (let i = 0; i <= pts; i++) {
+        // Start at 6 o'clock and mirror left/right, so the waveform's two ends meet at
+        // the bottom (and its middle at the top).
+        const a = Math.PI / 2 + (i / pts) * Math.PI * 2;
+        const k = Math.min(pts - 1, i <= pts / 2 ? 2 * i : 2 * (pts - i));
+        const rr = r + (n.waveform[k] - 0.5) * r * (0.25 + n.roughness * 0.6);
+        const px = x + rr * Math.cos(a), py = y + rr * Math.sin(a);
+        i ? lg.lineTo(px, py) : lg.moveTo(px, py);
+      }
+      const alpha = 0.22 + 0.55 * n.amplitude;
+      obstacles.push({ kind: 'ring', x, y, r, w: Math.min(1, alpha / 0.5) });
+      lg.strokeStyle = light(n, alpha);
+      lg.lineWidth = 1.8 * dpr;
+      lg.stroke();
+    }
+  }
+
+  // Traces (horizontal) / Columns (vertical) / Weave (both): each node's waveform,
+  // trigger-aligned and stretched edge to edge at its pitch, at most 16/852 of the
+  // screen height across, like a bank of oscilloscope traces.
+  // Columns put pitch on the x axis: low on the left, high on the right.
+  const xForPitch = (n, w) => w * (0.1 + 0.8 * n.t);
+
+  function traceLine(n, vertical, strength) {
+    const W = layer.width, H = layer.height;
+    const span = 38;   // waveform points across the screen (of 64): the zoom
+    const pos = vertical ? xForPitch(n, W) : yFor(n, H);
+    const length = vertical ? H : W;
+    const half = (TRACE_HEIGHT * screenHeight() / 2) * dpr * Math.min(1, 0.25 + n.amplitude * 2.2) * (n.touch ? 0.7 : 1);
+    const start = trigger(n.waveform, span);
+    const pts = [];
+    for (let j = 0; j <= span; j++) {
+      const along = length * (j / span);
+      const off = ((n.waveform[start + j] - 0.5) / 0.48) * half;
+      pts.push(vertical ? [pos + off, along] : [along, pos - off]);
+    }
+    lg.beginPath();
+    lg.moveTo(pts[0][0], pts[0][1]);
+    for (let j = 1; j < pts.length - 1; j++) {   // smooth through the samples
+      const mx = (pts[j][0] + pts[j + 1][0]) / 2, my = (pts[j][1] + pts[j + 1][1]) / 2;
+      lg.quadraticCurveTo(pts[j][0], pts[j][1], mx, my);
+    }
+    lg.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+    const alpha = (0.12 + 0.5 * n.amplitude) * (n.touch ? 0.85 : 1) * strength;
+    obstacles.push({ kind: vertical ? 'v' : 'h', p: pos, w: Math.min(1, alpha / 0.5) });
+    lg.strokeStyle = light(n, alpha);
+    lg.lineWidth = 1.7 * dpr;
+    lg.stroke();
+  }
+
+  function drawTraces(list, dt, mode) {
+    begin(burnRate(18, 4), 0, dt);
+    const both = mode === 'weave';
+    for (const n of list) {
+      if (mode !== 'columns') traceLine(n, false, both ? 0.8 : 1);
+      if (mode !== 'traces') traceLine(n, true, both ? 0.8 : 1);
+    }
+  }
+
+  function composite(dt) {
+    if (phosphor && state.display.theme === 3) {   // Custom theme: the GPU paints the finished picture
+      phosphor.step(layer, persist.decay, persist.shift, dt, themeParams());
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'copy';
+      g.drawImage(output, 0, 0);
+      g.globalCompositeOperation = 'source-over';
+      return;
+    }
+    if (phosphor) phosphor.step(layer, persist.decay, persist.shift, dt);
+    else step2d(persist.decay, persist.shift);
+    const sources = [output];
+    const W = canvas.width, H = canvas.height;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'lighter';
+    for (const src of sources) g.drawImage(src, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    ga.clearRect(0, 0, glowA.width, glowA.height);
+    ga.globalCompositeOperation = 'lighter';
+    for (const src of sources) ga.drawImage(src, 0, 0, glowA.width, glowA.height);
+    gb.clearRect(0, 0, glowB.width, glowB.height);
+    gb.drawImage(glowA, 0, 0, glowB.width, glowB.height);
+    g.globalCompositeOperation = 'lighter';
+    const glow = state.display.glow;
+    // Above glow 1 these exceed 1: the rest is drawn as a second pass.
+    for (let a = 0.2 + 0.75 * glow; a > 0; a -= 1) { g.globalAlpha = Math.min(1, a); g.drawImage(glowA, 0, 0, W, H); }
+    for (let a = 0.15 + 0.8 * glow; a > 0; a -= 1) { g.globalAlpha = Math.min(1, a); g.drawImage(glowB, 0, 0, W, H); }
+    g.globalAlpha = 0.1 + 0.25 * glow;
+    for (const src of sources) g.drawImage(src, 0, -dpr);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+  }
+
+  // Noise style Flock: birds that fly on a wind (a curl-noise flow field) shaped by the noise
+  // bed. The screen height is a frequency axis
+  // for the noise (40 Hz at the bottom .. 12 kHz at the top); the noise bed is a lowpass,
+  // so birds below its cutoff fly a little faster than birds above it. Noise Tone (with
+  // its sweep) sets how fast the birds fly and makes the wind busier (2 to 4 swirls),
+  // traveling and changing faster.
+  const FLOW = {
+    minMul: 0.12, maxMul: 1, gamma: 2,     // speed = min + (max - min) * loudness^gamma
+    speed: 0.12,                           // screen heights per second at max
+    swirls: [2, 4],                        // swirl centers on screen: dark .. bright
+    detail: [0, 0],                        // weight of a finer layer (off: it adds many small swirls)
+    evolve: [0.03, 0.11],                  // how fast the field changes (per second)
+    travel: [0.02, 0.1],                   // how fast the field itself moves (cells per second)
+    gust: 0.35,                            // how much the gust field mixes in
+    strengthRef: 0.5,                      // flow strength at and above which particles move at full speed
+  };
+  const mix = (r, t) => r[0] + (r[1] - r[0]) * t;
+  // Smooth 3D value noise (quintic fade) for the flow field; values 0..1.
+  const perm = new Uint8Array(512);
+  { const p = [...Array(256).keys()];
+    for (let i = 255; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255]; }
+  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+  function vnoise(x, y, z) {
+    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+    const xf = x - xi, yf = y - yi, zf = z - zi;
+    const X = xi & 255, Y = yi & 255, Z = zi & 255;
+    const h = (a, b, c) => perm[perm[perm[a] + b] + c] / 255;
+    const u = fade(xf), v = fade(yf), w = fade(zf);
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const X1 = (X + 1) & 255, Y1 = (Y + 1) & 255, Z1 = (Z + 1) & 255;
+    return lerp(
+      lerp(lerp(h(X, Y, Z), h(X1, Y, Z), u), lerp(h(X, Y1, Z), h(X1, Y1, Z), u), v),
+      lerp(lerp(h(X, Y, Z1), h(X1, Y, Z1), u), lerp(h(X, Y1, Z1), h(X1, Y1, Z1), u), v), w);
+  }
+  // The field's own state: time (how it changes) and an offset (where it has moved to).
+  // The offset moves in a direction that turns slowly, so no side is favored for long.
+  const field = { t: Math.random() * 100, ox: 0, oy: 0 };
+  // Potential at field point (x, y): a base layer plus a finer layer for bright noise.
+  function potential(x, y, detail) {
+    const base = vnoise(x, y, field.t);
+    if (detail <= 0) return base;
+    return base + detail * 0.5 * vnoise(x * 2.3 + 17, y * 2.3 + 31, field.t * 1.6);
+  }
+  // Loudness (0..1) of the noise bed at screen point (x, y): the lowpass response at
+  // this height, scaled by the gust field.
+  function loudnessAt(x, y, H, k, cutoff) {
+    const f = 40 * Math.pow(300, 1 - y / H);
+    const r = f / cutoff;
+    const lp = 1 / Math.sqrt(1 + r * r * r * r);
+    const gs = 2.2 / H;                    // gust patches: about 2 per screen height
+    const gust = vnoise(x * gs + field.ox + 50, y * gs + field.oy, field.t * 1.7);
+    return Math.min(1, Math.max(0, lp * (1 - FLOW.gust + 2 * FLOW.gust * gust)));
+  }
+  // Flocking (boids): a fixed number of birds always fly. Each steers to match its
+  // neighbors' heading, stay near them, and keep a small gap; the wind field carries the
+  // flock, so blobs form, stretch, split and merge. Lines pull nearby birds in; a bird that
+  // reaches a line joins it and is gone. A bird that is gone (joined a line, left the
+  // screen, or lived its span) reappears at a random place, so the screen stays evenly filled.
+  // Distances are in screen heights; rates are per second.
+  const FLOCK = {
+    count: 700,                            // birds on a phone screen (same density on any screen)
+    span: [12, 30],                        // s: how long a bird lives before it reappears elsewhere
+    sight: 0.12,                           // how far a bird sees its neighbors
+    gap: 0.009,                            // personal space
+    align: 1.8,                            // match neighbors' velocity
+    cohere: 1.0,                           // move toward neighbors' center
+    separate: 1.2,                         // push apart inside the gap (screen heights per s², any speed)
+    wind: 0.7,                             // follow the wind's velocity
+    minSpeed: 0.6,                         // slowest flight, as a share of the local wind speed
+    wander: 1.0,                           // each bird's own drifting heading, vs the wind and flock
+    wanderTurn: 1.6,                       // radians per √second: how fast that heading drifts
+    calm: 0.4,                             // wind strength kept near swirl centers (no dead spots)
+    pull: 0.9,                             // pull toward lines (screen heights per s²)
+    pullZone: 0.15,                        // how close to a line a bird starts to feel its pull
+    absorb: 0.006,                         // a bird this close to a line joins it and is gone
+    alpha: 0.25,                           // brightness
+    tail: 0.005,                           // s of motion shown as a streak
+  };
+  let cellHead = new Int32Array(0), cellNext = new Int32Array(0), cellSum = new Float64Array(0);
+  const birds = [];
+  // Each particle's own brightness, 0.15 .. 1: mostly dim, a few bright (squared random).
+  const shine = () => { const u = Math.random(); return 0.15 + 0.85 * u * u; };
+  // Start birds already flying. At the start (fresh), they come in loose groups, each
+  // with its own heading: birds placed evenly at rest settle into a grid-like lattice.
+  let seedGroup = null;
+  function spawn(g, W, H, fresh) {
+    const speed = FLOW.speed * H * 0.5;
+    if (fresh) {
+      if (!seedGroup || seedGroup.left <= 0) {
+        seedGroup = { x: Math.random() * W, y: Math.random() * H, a: Math.random() * Math.PI * 2,
+          r: (0.05 + 0.1 * Math.random()) * H, left: 20 + Math.floor(Math.random() * 60) };
+      }
+      seedGroup.left--;
+      // Gaussian-ish scatter around the group's center (sum of two uniforms per axis)
+      g.x = seedGroup.x + (Math.random() + Math.random() - 1) * seedGroup.r * 2;
+      g.y = seedGroup.y + (Math.random() + Math.random() - 1) * seedGroup.r * 2;
+      g.wa = seedGroup.a + (Math.random() - 0.5) * 0.6;
+    } else {
+      g.x = Math.random() * W; g.y = Math.random() * H;
+      g.wa = Math.random() * Math.PI * 2;
+    }
+    g.vx = Math.cos(g.wa) * speed; g.vy = Math.sin(g.wa) * speed;
+    g.span = FLOCK.span[0] + Math.random() * (FLOCK.span[1] - FLOCK.span[0]);
+    g.age = fresh ? Math.random() * g.span : 0;   // spread start times, so birds don't change together
+    g.hue = Math.random() * 360;           // used in Rainbow mode
+    g.shine = shine();
+    return g;
+  }
+  function drawBirds(ctx, level, dt, sweep) {
+    const W = layer.width, H = layer.height;
+    // 0 dark … 1 bright: the noise Tone, following its sweep (as the slider shows it)
+    const bright = Math.min(1, Math.max(0, state.settings.noiseTone + 0.4 * (sweep || 0)));
+    // The engine's noise cutoff (Hz), with the sweep
+    const cutoff = (420 + 2400 * state.settings.noiseTone) * Math.pow(2, sweep || 0);
+    // Field units per pixel, so the screen holds about `swirls` swirl centers whatever its
+    // shape (this value noise has about 0.38 centers per square unit).
+    const k = Math.sqrt(mix(FLOW.swirls, bright) / (0.38 * W * H)), e = 0.01;
+    const detail = mix(FLOW.detail, bright);
+    // The field moves itself and changes, faster when the noise is brighter.
+    field.t += dt * mix(FLOW.evolve, bright);
+    const heading = vnoise(field.t * 0.15, 7.5, 3.3) * Math.PI * 4;
+    const travel = mix(FLOW.travel, bright) * dt;
+    field.ox += Math.cos(heading) * travel; field.oy += Math.sin(heading) * travel;
+    // Tone sets the flock's speed: dark noise slow, bright noise fast.
+    const toneSpeed = 0.2 + 0.8 * Math.pow(bright, 1.5);
+    // Always the same number of birds, at a phone's density (393 × 852 pt) on every screen;
+    // capped for very large windows.
+    const area = Math.min(6, Math.max(0.5, (innerWidth * innerHeight) / (393 * 852)));
+    const target = Math.round(FLOCK.count * area);
+    while (birds.length < target) birds.push(spawn({}, W, H, true));
+    if (birds.length > target) birds.length = target;
+    const n = birds.length;
+    if (!n) return;
+
+    // Two grids. Coarse cells (one sight wide) keep each cell's bird count and sums of
+    // position and velocity, for alignment and cohesion in constant time per bird. Fine
+    // cells (one gap wide) link their birds, for separation from the few closest ones.
+    const sight = FLOCK.sight * H, gap = FLOCK.gap * H;
+    const cols = Math.ceil(W / sight) + 2, rows = Math.ceil(H / sight) + 2;
+    if (cellSum.length < cols * rows * 5) cellSum = new Float64Array(cols * rows * 5);
+    cellSum.fill(0, 0, cols * rows * 5);
+    const fcols = Math.ceil(W / gap) + 2, frows = Math.ceil(H / gap) + 2;
+    if (cellHead.length < fcols * frows) cellHead = new Int32Array(fcols * frows);
+    if (cellNext.length < n) cellNext = new Int32Array(n * 2);
+    cellHead.fill(-1, 0, fcols * frows);
+    const clampCell = (v, size, max) => Math.min(max - 1, Math.max(0, Math.floor(v / size) + 1));
+    for (let i = 0; i < n; i++) {
+      const g = birds[i];
+      const c = (clampCell(g.y, sight, rows) * cols + clampCell(g.x, sight, cols)) * 5;
+      cellSum[c] += 1; cellSum[c + 1] += g.x; cellSum[c + 2] += g.y; cellSum[c + 3] += g.vx; cellSum[c + 4] += g.vy;
+      const f = clampCell(g.y, gap, frows) * fcols + clampCell(g.x, gap, fcols);
+      cellNext[i] = cellHead[f]; cellHead[f] = i;
+    }
+
+    const step = Math.min(dt, 1 / 30);     // keep the steering stable on slow frames
+    const zone = FLOCK.pullZone * H, absorb = FLOCK.absorb * H;
+    for (let i = 0; i < n; i++) {
+      const g = birds[i];
+      // Wind at this point: the curl of the potential, slower near swirl centers, faster
+      // where the noise bed is louder.
+      const fx = g.x * k + field.ox, fy = g.y * k + field.oy;
+      const dpdx = (potential(fx + e, fy, detail) - potential(fx - e, fy, detail)) / (2 * e);
+      const dpdy = (potential(fx, fy + e, detail) - potential(fx, fy - e, detail)) / (2 * e);
+      const len = Math.hypot(dpdx, dpdy) || 1;
+      const strength = FLOCK.calm + (1 - FLOCK.calm) * Math.min(1, len / (FLOW.strengthRef * (1 + 0.5 * detail)));
+      const loud = loudnessAt(g.x, g.y, H, k, cutoff);
+      // Speed: mostly from Tone; the noise loudness at this height adds a little.
+      const top = FLOW.speed * H * toneSpeed * (0.6 + 0.4 * Math.pow(loud, FLOW.gamma));
+      const wx = (dpdy / len) * top * strength, wy = (-dpdx / len) * top * strength;
+
+      // Neighbors: the flock in this coarse cell and the 8 around it (minus this bird)
+      let count = -1, px = -g.x, py = -g.y, ax = -g.vx, ay = -g.vy, sx = 0, sy = 0;
+      const cx = clampCell(g.x, sight, cols), cy = clampCell(g.y, sight, rows);
+      for (let oy = -1; oy <= 1; oy++) {
+        const ry = cy + oy; if (ry < 0 || ry >= rows) continue;
+        for (let ox = -1; ox <= 1; ox++) {
+          const rx = cx + ox; if (rx < 0 || rx >= cols) continue;
+          const c = (ry * cols + rx) * 5;
+          count += cellSum[c]; px += cellSum[c + 1]; py += cellSum[c + 2]; ax += cellSum[c + 3]; ay += cellSum[c + 4];
+        }
+      }
+      // Separation: birds in this fine cell and the 8 around it, inside the gap
+      const fx0 = clampCell(g.x, gap, fcols), fy0 = clampCell(g.y, gap, frows);
+      for (let oy = -1; oy <= 1; oy++) {
+        const ry = fy0 + oy; if (ry < 0 || ry >= frows) continue;
+        for (let ox = -1; ox <= 1; ox++) {
+          const rx = fx0 + ox; if (rx < 0 || rx >= fcols) continue;
+          for (let j = cellHead[ry * fcols + rx]; j !== -1; j = cellNext[j]) {
+            if (j === i) continue;
+            const o = birds[j];
+            const dx = g.x - o.x, dy = g.y - o.y, d = Math.hypot(dx, dy);
+            // Inside the gap: push away, stronger when closer.
+            if (d < gap && d > 0) { const push = (1 - d / gap) / d; sx += dx * push; sy += dy * push; }
+          }
+        }
+      }
+      let fxs = (wx - g.vx) * FLOCK.wind, fys = (wy - g.vy) * FLOCK.wind;
+      // Autonomy: each bird also wants to fly its own way, a heading that drifts at random.
+      // This keeps birds moving and spreading where the wind is weak and no line pulls.
+      g.wa = (g.wa ?? Math.random() * Math.PI * 2) + (Math.random() - 0.5) * FLOCK.wanderTurn * Math.sqrt(dt) * 2;
+      fxs += (Math.cos(g.wa) * top - g.vx) * FLOCK.wander;
+      fys += (Math.sin(g.wa) * top - g.vy) * FLOCK.wander;
+      if (count > 0) {
+        fxs += (ax / count - g.vx) * FLOCK.align + (px / count - g.x) * FLOCK.cohere;
+        fys += (ay / count - g.vy) * FLOCK.align + (py / count - g.y) * FLOCK.cohere;
+        // Separation does not scale with speed, so slow flocks keep their spacing too.
+        fxs += sx * FLOCK.separate * H; fys += sy * FLOCK.separate * H;
+      }
+      // Lines pull: straight toward the nearest point of each line within reach, stronger
+      // closer in and for brighter lines. Touching a line, the bird joins it.
+      g.joins = false;
+      for (const o of obstacles) {
+        let d, nx, ny;
+        if (o.kind === 'ring') {
+          const dx = g.x - o.x, dy = g.y - o.y, dc = Math.hypot(dx, dy) || 1;
+          d = dc - o.r; nx = dx / dc; ny = dy / dc;   // outside the ring: outward; inside: inward
+        } else if (o.kind === 'h') { d = g.y - o.p; nx = 0; ny = 1; }
+        else { d = g.x - o.p; nx = 1; ny = 0; }
+        const ad = Math.abs(d);
+        if (ad >= zone) continue;
+        if (ad < absorb && o.w > 0.2) { g.joins = true; break; }
+        const t = 1 - ad / zone, pull = FLOCK.pull * H * o.w * t * (d < 0 ? 1 : -1);
+        fxs += nx * pull; fys += ny * pull;
+      }
+      g.ax = fxs; g.ay = fys; g.top = top; g.loud = loud;
+    }
+
+    // Move, then draw: a dot, stretched into a short streak when the bird is fast.
+    // Look as heavy as the view's lines (Ring 1.8, the trace views 1.7). A line is drawn
+    // in the same place every frame and builds up in the phosphor; a moving dot doesn't,
+    // so a dot of the same width looks thinner. 1.6× makes up for that.
+    const size = 1.6 * (state.viz === 'shapes' ? 1.8 : 1.7) * dpr;
+    const out = 0.04 * H;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = size;
+    for (const g of birds) {
+      g.vx += g.ax * step; g.vy += g.ay * step;
+      const v = Math.hypot(g.vx, g.vy), lo = FLOCK.minSpeed * g.top, hi = 1.3 * g.top;
+      if (v > hi) { g.vx *= hi / v; g.vy *= hi / v; }
+      else if (v < lo) {
+        if (v > 1e-6) { g.vx *= lo / v; g.vy *= lo / v; }
+        else { const a = Math.random() * Math.PI * 2; g.vx = Math.cos(a) * lo; g.vy = Math.sin(a) * lo; }
+      }
+      g.x += g.vx * dt; g.y += g.vy * dt;
+      g.age += dt;
+      // Joined a line, off screen or past its span: it reappears at a random place.
+      if (g.joins || g.age >= g.span || g.x < -out || g.x > W + out || g.y < -out || g.y > H + out) spawn(g, W, H, false);
+      const envelope = Math.min(1, g.age, g.span - g.age);   // fade in and out over 1 s
+      // Brightness follows the noise level (as Grain does): no audible noise, no birds.
+      ctx.strokeStyle = light(g, FLOCK.alpha * g.shine * envelope * Math.min(1.5, level / 0.3));
+      ctx.beginPath();
+      ctx.moveTo(g.x - g.vx * FLOCK.tail, g.y - g.vy * FLOCK.tail);
+      ctx.lineTo(g.x + 0.01, g.y);
+      ctx.stroke();
+    }
+  }
+
+  // Noise style Grain (the original): grain whose amount follows the noise level and whose character follows
+  // the noise filter (Brightness): dark noise is a soft, slow, larger haze; bright
+  // noise is fine, fast-flickering specks. Slightly denser toward the sides, where the
+  // noise bed is panned. Drawn into the same phosphor layer as everything else.
+  const grains = [];
+  function drawNoise(ctx, level, dt, sweep) {
+    const W = layer.width, H = layer.height;
+    // 0 dark … 1 bright: the noise Tone, following its sweep
+    const bright = Math.min(1, Math.max(0, state.settings.noiseTone + 0.4 * (sweep || 0)));
+    // Same grain density as on a phone (393 × 852 pt) on every screen; capped for very
+    // large windows.
+    const area = Math.min(6, Math.max(0.5, (innerWidth * innerHeight) / (393 * 852)));
+    const target = Math.round(level * (90 + 300 * bright) * area);
+    while (grains.length < target) grains.push({ life: 0, age: 1 });
+    if (grains.length > target) grains.length = target;
+    const size = (2.6 - 1.9 * bright) * dpr;                   // ~2.6 px dark → ~0.7 px bright
+    const lifespan = 2.4 - 2.25 * bright;                      // s: long drifting haze → brief sparkle
+    const drift = (6 + 30 * bright) * dpr;                     // px/s
+    for (const g of grains) {
+      g.age += dt / g.life;
+      if (g.age >= 1) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const u = Math.random();
+        const edge = 0.5 + side * 0.5 * (Math.random() < 0.5 ? u : 1 - u * u);   // mild bias to the sides
+        g.x = edge * W; g.y = Math.random() * H;
+        g.vx = (Math.random() - 0.5) * drift; g.vy = (Math.random() - 0.5) * drift;
+        g.life = lifespan * (0.5 + Math.random());
+        g.age = 0;
+        g.hue = Math.random() * 360;   // used in Rainbow mode
+        g.shine = shine();
+      }
+      g.x += g.vx * dt; g.y += g.vy * dt;
+      const envelope = Math.sin(Math.PI * g.age);
+      ctx.fillStyle = light(g, level * (0.14 + 0.24 * bright) * envelope * g.shine);
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, size * (0.6 + 0.4 * envelope), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  let blank = false;
+  function frame(now) {
+    const dt = lastFrame ? Math.min(0.1, (now - lastFrame) / 1000) : 1 / 60;
+    lastFrame = now;
+    stepColor(dt);
+    if (!canvas.width || !canvas.height) {
+      // Hidden or zero-size viewport (background tab, thumbnail): nothing to draw yet,
+      // and drawImage would throw and stop this loop for good.
+    } else if (state.settings && state.viz === 'none') {
+      animateSweepControls(currentVisual());
+      if (!blank) {                                            // nothing to draw: clear once
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.fillStyle = '#000';
+        g.fillRect(0, 0, canvas.width, canvas.height);
+        clearLayer();
+        blank = true;
+      }
+    } else if (state.settings) {
+      blank = false;
+      const v = currentVisual();
+      animateSweepControls(v);
+      const list = nodes(v);
+      if (rainbowOn()) assignHues(list, now);
+      placeNodes(list, dt);
+      if (['traces', 'columns', 'weave'].includes(state.viz)) drawTraces(list, dt, state.viz);
+      else drawShapes(list, dt);
+      // Noise: Grain (specks) or Flock (birds on the noise bed's wind, into the lines).
+      const style = state.display.particles - 1;   // -1 off, 0 Grain, 1 Flock
+      if (style === 0 && v && v.noise > 0.001) drawNoise(lg, v.noise, dt, v.sweep);
+      else grains.length = 0;
+      if (style === 1) drawBirds(lg, v && v.noise > 0.001 ? v.noise : 0, dt, v ? v.sweep : 0);
+      else birds.length = 0;
+      composite(dt);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---- saved setups ----------------------------------------------------------------------
+
+  function savedList() {
+    try { return JSON.parse(store.get(SAVED_STORE) || '[]'); } catch (e) { return []; }
+  }
+
+  function renderSaved() {
+    const list = savedList();
+    const ul = $('saved-list');
+    ul.replaceChildren(...list.map((item, i) => {
+      const li = document.createElement('li');
+      const what = document.createElement('span');
+      what.className = 'what';
+      what.textContent = item.label;
+      const when = document.createElement('span');
+      when.className = 'when';
+      when.textContent = new Date(item.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      what.append(when);
+      const load = Object.assign(document.createElement('button'), { type: 'button', className: 'btn small', textContent: 'Load' });
+      load.addEventListener('click', () => loadSaved(item));
+      const del = Object.assign(document.createElement('button'), { type: 'button', className: 'btn small x', textContent: '×' });
+      del.setAttribute('aria-label', `Delete ${item.label}`);
+      del.addEventListener('click', () => {
+        const next = savedList();
+        next.splice(i, 1);
+        store.set(SAVED_STORE, JSON.stringify(next));
+        renderSaved();
+      });
+      li.append(what, load, del);
+      return li;
+    }));
+  }
+
+  function saveCurrent(name) {
+    const sc = state.scene || {};
+    const scene = [sc.key, sc.tempo ? `${Math.round(sc.tempo)} bpm` : ''].filter(Boolean).join(' · ');
+    const item = {
+      at: Date.now(),
+      label: typeof name === 'string' ? `${name} (${scene})` : scene,
+      query: query(),
+      view: VIEWS.indexOf(state.viz),
+      display: { ...state.display },
+      auto: state.autoMinutes,
+    };
+    const list = [item, ...savedList()].slice(0, 30);
+    store.set(SAVED_STORE, JSON.stringify(list));
+    if (savedList().length === 0) status('Saving is unavailable in this browser.');
+    renderSaved();
+  }
+
+  function loadSaved(item) {
+    const parsed = parse(item.query);
+    state.settings = parsed.traits;
+    state.seed = parsed.seed;
+    syncControls();
+    if (Number.isInteger(item.view)) setViz(VIEWS[item.view] || VIEWS[0]);
+    if (item.display) setDisplay(displayFrom(item.display));
+    state.autoMinutes = Number(item.auto) || 0;
+    store.set(AUTO_STORE, String(state.autoMinutes));
+    $('auto-regen').value = String(state.autoMinutes);
+    setVolume(state.settings.volume);
+    save();
+    preview();
+    if (state.playing) play();
+  }
+
+  // ---- play by touch -------------------------------------------------------------------
+  // y -> nearest scale note in the playing scene (inverse of the Motifs axis), x -> voice character
+  // (left to right through the scene's palette) and pan.
+
+  // In Columns pitch runs left to right, so the axes swap.
+  const pitchAxis = (e) => state.viz === 'columns'
+    ? (e.clientX / innerWidth - 0.1) / 0.8
+    : (0.9 - e.clientY / innerHeight) / 0.8;
+  const voiceAxis = (e) => state.viz === 'columns' ? e.clientY / innerHeight : e.clientX / innerWidth;
+
+  function noteAt(e) {
+    const pool = state.scene && state.scene.pool;
+    if (!pool || !pool.length) return 0;
+    // Played notes are drawn on the Motifs axis (placeNodes), so the finger maps
+    // through the same octaves: the nearest note of the scene's scale in that range.
+    const s = state.settings;
+    const lo = 12 * ((s.motifOctaveLow ?? 1) + 1), hi = 12 * ((s.motifOctaveHigh ?? 7) + 2);
+    const target = lo + Math.min(1, Math.max(0, pitchAxis(e))) * (hi - lo);
+    const classes = new Set(pool.map((f) => ((Math.round(69 + 12 * Math.log2(f / 440)) % 12) + 12) % 12));
+    let best = 0, bestDist = Infinity;
+    for (let m = lo; m <= hi; m++) {
+      if (!classes.has(m % 12)) continue;
+      const d = Math.abs(m - target);
+      if (d < bestDist) { best = m; bestDist = d; }
+    }
+    return 440 * 2 ** ((best - 69) / 12);
+  }
+
+  function setTouchPlay(on) {
+    state.touchPlay = on;
+    store.set(TOUCH_STORE, on ? '1' : '0');
+    $('touch-play').checked = on;
+    document.body.classList.toggle('touch-play', on);
+  }
+
+  async function pointerDown(e) {
+    if (!state.touchPlay) { setPanel(!panelOpen()); return; }
+    if (state.kind === 'js') { status('Play by touch needs the WebAssembly engine.'); return; }
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    const id = e.pointerId;
+    state.pointers.set(id, { frequency: 0, live: false });
+    if (!state.playing) await play();
+    const p = state.pointers.get(id);
+    if (!p || !state.node) return;   // released before audio was ready
+    p.frequency = noteAt(e);
+    p.live = true;
+    const x = Math.min(1, Math.max(0, e.clientX / innerWidth));
+    state.node.port.postMessage({ type: 'touchBegin', id, frequency: p.frequency,
+                                  character: Math.min(0.999, Math.max(0, voiceAxis(e))),
+                                  pan: Math.max(-1, Math.min(1, (x - 0.5) / 0.42)) });
+  }
+
+  function pointerMove(e) {
+    const p = state.pointers.get(e.pointerId);
+    if (!p || !p.live) return;
+    const f = noteAt(e);
+    if (f && f !== p.frequency) {
+      p.frequency = f;
+      state.node.port.postMessage({ type: 'touchMove', id: e.pointerId, frequency: f });
+    }
+  }
+
+  function pointerUp(e) {
+    const p = state.pointers.get(e.pointerId);
+    state.pointers.delete(e.pointerId);
+    if (p && p.live && state.node) state.node.port.postMessage({ type: 'touchEnd', id: e.pointerId });
+  }
+
+  // ---- share links ---------------------------------------------------------------------
+  // Schema v1 (docs/share-links.md): https://<host>/#v=1&<sound keys>&<look keys>. The
+  // settings are in the fragment (a browser never sends it to a server); every key is
+  // written, so a later change of a default can't change an old link.
+  const SHARE_BASE = 'https://inhalation.amplib.app/';   // the owner's domain (confirmed 2026-11-22)
+  const SHARE_VERSION = 1;
+  const hex6 = (c) => String(c || '').replace('#', '').toLowerCase();
+
+  function shareLink() {
+    const d = state.display, n = (v) => Number(Number(v).toFixed(3));
+    let look = `&shape=${VIEWS.indexOf(state.viz)}&particles=${d.particles}&theme=${d.theme}&color=${hex6(d.color)}` +
+      `&rainbow=${d.rainbow ? 1 : 0}&colorCycle=${d.colorCycle ? 1 : 0}&colorCycleSeconds=${Math.round(d.colorCycleSeconds)}` +
+      `&glow=${n(d.glow)}&burnIn=${n(d.burnIn)}`;
+    if (d.theme === 3) {
+      const keep = (v, words) => (words.includes(v) ? v : hex6(v));
+      look += `&themeBackground=${hex6(d.themeBackground || '#000000')}&themeLines=${keep(d.themeLines, ['rainbow'])}` +
+        `&themeGlow=${keep(d.themeGlow, ['rainbow', 'lines'])}`;
+    }
+    return `${SHARE_BASE}#v=${SHARE_VERSION}&${query()}${look}`;
+  }
+
+  // The link's settings, or null when the page was opened without one.
+  function sharedFragment() {
+    const h = location.hash.slice(1);
+    return /(^|&)v=\d/.test(h) ? h : null;
+  }
+
+  // Opens a shared link: the current settings go to Saved first ("Before shared link"),
+  // then the link's sound and look apply. Playback does not start.
+  function openShared(fragment) {
+    const p = new URLSearchParams(fragment);
+    const version = Number(p.get('v')) || SHARE_VERSION;
+    saveCurrent('Before shared link');
+    const parsed = parse(fragment);   // the sound keys (old names too); look keys are ignored there
+    state.settings = parsed.traits;
+    state.seed = parsed.seed;
+    // Look keys: numbers are clamped to their range; an id that doesn't exist, or a missing
+    // or unreadable key, gets the default.
+    const D = DISPLAY_DEFAULTS;
+    const num = (k, lo, hi, f) => { const x = Number(p.get(k)); return p.get(k) !== null && p.get(k) !== '' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : f; };
+    const hex = (k, f) => (/^[0-9a-f]{6}$/i.test(p.get(k) || '') ? `#${p.get(k).toLowerCase()}` : f);
+    const word = (k, words, f) => (words.includes(p.get(k)) ? p.get(k) : hex(k, f));
+    const id = (k, ids, f) => (ids.includes(Number(p.get(k))) && p.get(k) !== '' ? Number(p.get(k)) : f);
+    setViz(VIEWS[id('shape', [0, 2, 3, 4, 5], 0)]);
+    const change = {
+      particles: id('particles', [0, 1, 2], D.particles),
+      theme: id('theme', [0, 1, 2, 3], D.theme),
+      color: hex('color', D.color),
+      rainbow: p.get('rainbow') === '1',
+      colorCycle: p.get('colorCycle') === '1',
+      colorCycleSeconds: num('colorCycleSeconds', CYCLE_MIN, CYCLE_MAX, D.colorCycleSeconds),
+      glow: num('glow', 0, 1.25, D.glow),
+      burnIn: num('burnIn', 0, 1.25, D.burnIn),
+    };
+    if (change.theme === 3) {
+      change.themeBackground = hex('themeBackground', '#000000');
+      change.themeLines = word('themeLines', ['rainbow'], D.themeLines);
+      change.themeGlow = word('themeGlow', ['rainbow', 'lines'], D.themeGlow);
+      if (!phosphor) change.theme = 0;   // Custom needs WebGL2: Dark with the same color
+    }
+    setDisplay(change);
+    syncControls();
+    setVolume(state.settings.volume);
+    if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
+    save();
+    preview();
+    if (state.playing) play();
+    setPanel(true);
+    status(version > SHARE_VERSION
+      ? 'This link is from a newer version of in halation; some settings may not apply.'
+      : 'Opened a shared link. Your earlier settings are in Saved.');
+    window.history.replaceState(null, '', location.pathname + location.search);   // a reload keeps your later changes
+  }
+
+  // ---- start ----------------------------------------------------------------------------
+
+  async function init() {
+    resize();
+    addEventListener('resize', resize);
+    setViz(state.viz);
+    requestAnimationFrame(frame);
+    try {
+      const res = await fetch('in-halation-core.wasm');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      state.bytes = await res.arrayBuffer();
+      state.local = new InHalationWasm(await WebAssembly.compile(state.bytes), 48000);
+      state.moods = state.local.moods();
+    } catch (e) {
+      console.warn('WebAssembly unavailable, using the Web Audio engine', e);
+      state.local = null;
+      state.js = await import('./in-halation.mjs');
+      state.moods = state.js.MOODS.map((m) => ({ value: m.value, label: m.label, description: m.description }));
+    }
+    const parsed = parse(store.get(STORE) || `seed=${randomSeed()}`);
+    state.settings = parsed.traits;
+    state.seed = parsed.seed;
+    buildControls();
+    syncControls();
+    preview();
+    $('engine-label').textContent = state.local ? 'Native core · WebAssembly' : 'Web Audio engine';
+    $('play-btn').disabled = false;
+    $('regen-btn').disabled = false;
+    $('play-btn').addEventListener('click', () => (state.playing ? pause() : play()));
+    $('regen-btn').addEventListener('click', regen);
+    $('save-btn').addEventListener('click', () => saveCurrent());
+    renderSaved();
+    if (sharedFragment()) openShared(sharedFragment());
+    addEventListener('hashchange', () => { if (sharedFragment()) openShared(sharedFragment()); });
+    $('auto-regen').value = String(state.autoMinutes);
+    if ($('auto-regen').value !== String(state.autoMinutes)) { state.autoMinutes = 0; $('auto-regen').value = '0'; }
+    $('auto-regen').addEventListener('change', (e) => {
+      state.autoMinutes = Number(e.target.value);
+      store.set(AUTO_STORE, String(state.autoMinutes));
+      armAutoRegen();
+    });
+    $('randomize').checked = state.randomize;
+    $('randomize').addEventListener('change', (e) => {
+      state.randomize = e.target.checked;
+      store.set(RANDOM_STORE, state.randomize ? '1' : '0');
+      if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'randomize', value: state.randomize });
+    });
+    setInterval(showAutoCountdown, 500);
+    $('collapse').addEventListener('click', () => setPanel(false));
+    $('grip').addEventListener('click', () => setPanel(false));
+    $('handle').addEventListener('click', () => setPanel(true));
+    canvas.addEventListener('pointerdown', pointerDown);
+    canvas.addEventListener('pointermove', pointerMove);
+    canvas.addEventListener('pointerup', pointerUp);
+    canvas.addEventListener('pointercancel', pointerUp);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    $('touch-play').addEventListener('change', (e) => setTouchPlay(e.target.checked));
+    setTouchPlay(state.touchPlay);
+    addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') setPanel(false);
+      if (e.key === ' ' && e.target === document.body) { e.preventDefault(); state.playing ? pause() : play(); }
+    });
+    if ('mediaSession' in navigator) {
+      const set = (a, fn) => { try { navigator.mediaSession.setActionHandler(a, fn); } catch (e) { /* unsupported */ } };
+      set('play', play);
+      set('pause', pause);
+      set('nexttrack', regen);
+    }
+    // Test hook: render offline through the same worklet and wasm (used by the parity check).
+    window.__inHalationOffline = async (q, seconds) => {
+      const ctx = new OfflineAudioContext({ numberOfChannels: 2, length: Math.round(seconds * 48000), sampleRate: 48000 });
+      await ctx.audioWorklet.addModule('worklet.js');
+      const node = new AudioWorkletNode(ctx, 'in-halation', { numberOfInputs: 0, outputChannelCount: [2] });
+      const ready = new Promise((r) => { node.port.onmessage = (e) => e.data.type === 'ready' && r(); });
+      node.port.postMessage({ type: 'init', bytes: state.bytes.slice(0) });
+      await ready;
+      node.port.postMessage({ type: 'play', query: q, randomSeed: 0.5 });
+      await new Promise((r) => setTimeout(r, 50));
+      node.connect(ctx.destination);
+      const buf = await ctx.startRendering();
+      return [buf.getChannelData(0), buf.getChannelData(1)];
+    };
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
