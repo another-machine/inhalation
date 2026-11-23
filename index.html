@@ -54,7 +54,7 @@
   html, body { height: 100%; margin: 0; }
   body { background: var(--black); color: var(--ink); font: 15px/1.45 var(--body); overflow: hidden;
          -webkit-font-smoothing: antialiased; }
-  #viz { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer;
+  #viz { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; transition: filter 0.8s ease;
          touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   body.touch-play #viz { cursor: crosshair; }
   /* Background (ids: 0 dark, 1 light, 2 color).
@@ -83,15 +83,16 @@
   body:not(.touch-play) .handle:not(:focus-visible) { opacity: 0; }
 
   .panel {
-    position: fixed; left: 0; right: 0; bottom: 0; max-height: 80%; overflow-y: auto; z-index: 5;
+    position: fixed; left: 0; right: 0; bottom: 0; height: 80%; overflow-y: auto; z-index: 5; align-content: start;
     background: var(--panel); backdrop-filter: blur(24px) saturate(140%); -webkit-backdrop-filter: blur(24px) saturate(140%);
     border-top: 1px solid var(--line); border-radius: 18px 18px 0 0;
     padding: 6px max(18px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
     transform: translateY(105%); transition: transform 260ms ease; display: grid; gap: 14px;
+    grid-auto-rows: max-content;   /* rows never shrink to fit: a tall section makes the panel scroll */
   }
   .panel.open { transform: none; }
   @media (min-width: 900px) {
-    .panel { left: auto; top: 0; width: 380px; max-height: none; border-radius: 0; border-top: 0;
+    .panel { left: auto; top: 0; width: 380px; height: auto; border-radius: 0; border-top: 0;
              border-left: 1px solid var(--line); transform: translateX(105%); align-content: start; padding-top: 18px; }
   }
   @media (prefers-reduced-motion: reduce) { .panel, .handle { transition: none; } }
@@ -105,6 +106,31 @@
   @media (min-width: 900px) { .grip { display: none; } }
 
   .head { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+  .head-actions { display: flex; gap: 6px; }
+  .head-actions .collapse:disabled { opacity: 0.35; cursor: default; }
+  .head-actions .collapse svg { width: 16px; height: 16px; }
+  /* Chips: small pill selects (Auto regen, layer FX). */
+  .chip { position: relative; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px;
+          height: 30px; padding: 0 10px; color: var(--ink); font: 500 12.5px var(--body); white-space: nowrap; }
+  .chip select { appearance: none; -webkit-appearance: none; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+  .chip select:disabled { cursor: default; }
+  .chip:has(select:disabled) { opacity: 0.45; }
+  .chip.on { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .auto-chip { margin-left: auto; height: 34px; padding: 0 12px; }
+  /* Play and Regen: the size of the other buttons (34 px), not larger. */
+  .transport .btn { height: 34px; padding: 0 14px; font-size: 13px; gap: 6px; }
+  .transport .btn svg { width: 15px; height: 15px; }
+  .transport .btn.primary { min-width: 84px; }
+  .fine { color: var(--dim); font: 12px var(--mono); }
+  .adv-view { display: grid; gap: 14px; }
+  /* Section menus (⋯ in a header): Randomize now, Reset. */
+  .pane-head .more { margin-right: 0; width: 26px; height: 26px; border: 0; border-radius: 50%; background: none; color: var(--dim);
+                  cursor: pointer; font: 600 15px var(--body); line-height: 1; }
+  .pane-head .more:hover, .pane-head .more[aria-expanded="true"] { background: var(--surface); color: var(--ink); }
+  .menu { position: fixed; z-index: 20; min-width: 170px; padding: 4px; border: 1px solid var(--line); border-radius: 12px;
+          background: var(--tooltip); box-shadow: 0 8px 24px var(--shadow); display: grid; }
+  .menu button { text-align: left; border: 0; background: none; color: var(--ink); font: 14px var(--body); padding: 9px 12px; border-radius: 8px; cursor: pointer; }
+  .menu button:hover, .menu button:focus-visible { background: var(--surface); outline: none; }
   .scene h1 { font: 500 17px/1.3 var(--body); margin: 0; text-wrap: balance; font-variant-numeric: tabular-nums; }
   .meta { margin: 4px 0 0; color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
   .chords { margin: 4px 0 0; color: var(--dim); font: 13px var(--mono); letter-spacing: 0.06em; }
@@ -124,7 +150,7 @@
   .seg { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
   .seg button { border: 0; background: none; color: var(--dim); border-radius: 999px; height: 34px; padding: 0 2px;
                 font: 500 12.5px var(--body); cursor: pointer; }
-  .seg button[aria-checked="true"] { background: var(--ink); color: var(--on-ink); }
+  .seg button[aria-checked="true"], .seg button[aria-selected="true"] { background: var(--ink); color: var(--on-ink); }
   button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
   .status { margin: 0; color: var(--dim); font-size: 13px; }
   .seg.sweep { grid-template-columns: repeat(4, 1fr); min-width: 230px; }
@@ -144,7 +170,42 @@
   .hint { margin: 0; color: var(--ink); font-size: 13px; }
   .caption { margin: -6px 0 0; font-size: 12.5px; }
   .reset { justify-self: start; }
-  /* More sound: the three sound sections, inside one closed group. */
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .lib-actions { display: flex; gap: 8px; }
+  .btn.icon { width: 44px; padding: 0; justify-content: center; }
+  /* Section dice: on = Regen and Auto regen randomize the section (random mode). */
+  .pane-head .dice { margin-right: 4px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line);
+                  background: none; color: var(--dim); border-radius: 999px; height: 26px; padding: 0 8px; cursor: pointer;
+                  font: 500 10.5px var(--body); letter-spacing: 0.06em; }
+  .pane-head .dice svg { width: 14px; height: 14px; }
+  .pane-head .dice[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  /* Random mode: sliders become ranges (Regen picks the value); the other randomized
+     controls show the value but can't be set. */
+  /* Drawn by hand (two native sliders on top of each other draw two full tracks): one thin
+     track, the range band in the slider color, two round thumbs, a small mark at the value. */
+  .dual { position: relative; height: 28px; }
+  .dual::before { content: ""; position: absolute; left: 8px; right: 8px; top: 12px; height: 4px; border-radius: 2px;
+                  background: var(--line); }
+  .dual input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 28px; margin: 0; pointer-events: none;
+                -webkit-appearance: none; appearance: none; background: transparent; }
+  .dual input::-webkit-slider-runnable-track { height: 28px; background: transparent; border: 0; }
+  .dual input::-moz-range-track { height: 28px; background: transparent; border: 0; }
+  .dual input::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 16px; height: 16px; margin-top: 6px;
+                                      border-radius: 50%; border: 0; background: var(--ink); box-shadow: 0 0 0 3px var(--surface); cursor: grab; }
+  .dual input::-moz-range-thumb { pointer-events: auto; width: 16px; height: 16px; border-radius: 50%; border: 0;
+                                  background: var(--ink); box-shadow: 0 0 0 3px var(--surface); cursor: grab; }
+  .dual input:focus-visible { outline: none; }
+  .dual input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--ink); }
+  .dual .band { position: absolute; top: 12px; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+  .dual .mark { position: absolute; top: 9px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--dim);
+                pointer-events: none; }
+  .row.ranged > input[type="range"], .fx.ranged > input[type="range"] { display: none; }
+  .mix .row .dual { order: 1; }
+  .mix .fx .dual { grid-column: 2 / 3; }
+  [data-rnd].locked { opacity: 0.45; pointer-events: none; }
+  .map-range { position: absolute; border: 1px dashed var(--ink); background: var(--map-tint); pointer-events: none; }
+  .recent-now { color: var(--dim); font: 12px var(--mono); padding: 0 6px; }
+  /* Advanced: the three sound sections, inside one closed group. */
   .nested { padding: 0 0 8px 12px; border-left: 1px solid var(--line); margin-bottom: 12px; }
   .nested details:first-child { border-top: 0; }
   details.sub { border-top: 1px solid var(--line); }
@@ -156,10 +217,22 @@
            font-size: 13px; z-index: 6; pointer-events: none; transition: opacity 400ms; }
 
   details { border-top: 1px solid var(--line); }
-  summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
-            padding: 12px 0; font: 500 11px var(--body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+  /* Section tabs: one row that scrolls sideways (no scroll bar); the open tab is filled. */
+  .tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-height: max-content; flex: none;
+          margin: 0 calc(-1 * max(18px, env(safe-area-inset-right))) 0 calc(-1 * max(18px, env(safe-area-inset-left)));
+          padding: 2px max(18px, env(safe-area-inset-right)) 4px max(18px, env(safe-area-inset-left));
+          scroll-padding-inline: 18px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: none; border: 1px solid var(--line); background: none; color: var(--dim); border-radius: 999px;
+                 height: 34px; padding: 0 14px; font: 500 13.5px var(--body); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  /* The open section's bar: its dice and its ⋯ menu, at the right. */
+  .pane-head { display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-height: 30px; margin: 2px 0 6px; }
+  .pane-head:empty { display: none; }
+  summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 0;
+            padding: 12px 0; font: 600 14px var(--body); color: var(--ink); }
   summary::-webkit-details-marker { display: none; }
-  summary::after { content: "+"; font: 400 18px var(--body); letter-spacing: 0; }
+  summary::after { content: "+"; font: 400 18px var(--body); letter-spacing: 0; color: var(--dim); }
   details[open] summary::after { content: "−"; }
   .group { display: grid; gap: 14px; padding: 0 0 16px; }
   .note { margin: 0; color: var(--dim); font-size: 13px; }
@@ -167,12 +240,21 @@
   .row-top { display: flex; justify-content: space-between; align-items: baseline; }
   /* Mix: one line per level (name, slider, value). */
   .mix { gap: 2px; }
-  .mix .row { grid-template-columns: 84px 1fr 3.5ch; align-items: center; gap: 10px; }
+  .mix .row { grid-template-columns: 84px 1fr 92px; align-items: center; gap: 10px; }
+  .mix .row-top output { display: none; }   /* no numbers in the Mix: the slider shows the level */
+  .mix .row > .chip { order: 3; justify-self: end; }
   .mix .row-top { display: contents; }
   .mix .row-top label { order: 0; font-size: 14px; white-space: nowrap; }
   .mix .row input[type="range"] { order: 1; }
-  .mix .row-top output { order: 2; text-align: right; }
+
   .mix .row.swept .row-top label::after { content: none; }
+  /* FX under each layer's level: None / Crush / Drive, then how much. */
+  /* A layer's FX amount, under its level line (only when an FX is on, or in random mode). */
+  .mix .fx { display: grid; grid-template-columns: 84px 1fr 92px; align-items: center; gap: 10px; margin: -2px 0 6px; }
+  .mix .fx:not(:has(> input:not([hidden]), > .dual:not([hidden]))) { display: none; }
+  .mix .fx > span { color: var(--dim); font-size: 12.5px; padding-left: 10px; }
+  .mix .fx input[type="range"], .mix .fx .dual { grid-column: 2 / 3; }
+  .mix .fx output { font: 13px var(--mono); color: var(--dim); text-align: right; }
   .row-top output { font: 13px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
   input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; margin: 0; }
   input[type="range"]:disabled { opacity: 0.55; cursor: default; }
@@ -194,10 +276,9 @@
                           background: var(--dim); transition: transform 0.15s, background 0.15s; }
   .switch input:checked { background: var(--accent); }
   .switch input:checked::before { transform: translateX(18px); background: var(--surface); }
-  /* One Octaves row: lowest and highest, each with − and +. */
-  .stepper.octaves .controls { gap: 6px; }
-  .stepper.octaves button { width: 30px; height: 30px; }
-  .stepper .to { color: var(--dim); font-size: 13px; margin: 0 4px; }
+  /* Octaves: one range slider (lowest and highest octave), whole steps, a tick at each octave. */
+  .octaves .tick { position: absolute; top: 20px; width: 1px; height: 5px; margin-left: -0.5px; background: var(--dim);
+                   pointer-events: none; }
   /* Peek: while a View control is in use on a phone, the panel goes see-through and only
      that control's row stays, so the whole animation shows. */
   .panel { transition: transform 260ms ease, background-color 160ms, border-color 160ms; }
@@ -208,15 +289,17 @@
                            box-shadow: 0 0 0 8px color-mix(in srgb, var(--surface) 72%, transparent); }
   @media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
   /* Small group headings inside a section (View: Shape, Color, Light). */
-  .subhead { margin: 6px 0 -4px; font: 500 11px var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+  .subhead { margin: 6px 0 -4px; font: 500 12.5px var(--body); color: var(--dim); }
   .subhead:first-child { margin-top: 0; }
   .line { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--dim);
           font: 13px var(--mono); }
   .small { height: 34px; font-size: 13px; padding: 0 14px; }
   .saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .saved li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; }
+  .saved li { display: grid; grid-template-columns: auto 1fr; grid-auto-flow: column; grid-auto-columns: auto; gap: 8px; align-items: center; }
   .saved .what { font-size: 14px; }
   .saved .when { display: block; color: var(--dim); font: 12px var(--mono); }
+  /* The state's main light color (Rainbow as a color wheel), to help tell items apart. */
+  .saved .swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line); }
   .saved .x { width: 34px; padding: 0; justify-content: center; }
   .saved:empty::before { content: "Nothing saved yet."; color: var(--dim); font-size: 13px; }
   .swatches { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
@@ -233,11 +316,10 @@
   /* Hover (or keyboard focus) on a label shows what the setting does. */
   [data-info] { position: relative; cursor: help; text-decoration: underline dotted var(--dim);
                 text-decoration-thickness: 1px; text-underline-offset: 4px; }
-  [data-info]:hover::after, label:focus-within > [data-info]::after, [data-info].show-info::after {
-    content: attr(data-info); position: absolute; left: 0; top: calc(100% + 6px); z-index: 10;
-    width: max-content; max-width: 250px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
-    background: var(--tooltip); color: var(--ink); font: 12.5px/1.4 var(--body); letter-spacing: 0; text-transform: none;
-    text-decoration: none; white-space: normal; pointer-events: none; box-shadow: 0 6px 18px var(--shadow); }
+  /* One tooltip for the page, placed by script under (or over) the label, inside the screen. */
+  #tip { position: fixed; z-index: 30; max-width: min(260px, calc(100vw - 24px)); padding: 8px 10px;
+         border: 1px solid var(--line); border-radius: 8px; background: var(--tooltip); color: var(--ink);
+         font: 12.5px/1.4 var(--body); pointer-events: none; box-shadow: 0 6px 18px var(--shadow); }
   /* Mood map: x = dark (left) to bright (right), y = calm (bottom) to active (top). */
   .map-wrap { display: grid; gap: 6px; }
   .map { position: relative; height: 230px; border: 1px solid var(--line); border-radius: 12px; cursor: crosshair;
@@ -259,6 +341,7 @@
 <body>
 <canvas id="viz" aria-label="Visualization. Tap to show or hide the controls."></canvas>
 <div id="viz-tint" aria-hidden="true"></div>
+<div id="tip" role="tooltip" hidden></div>
 <button class="handle" id="handle" aria-label="Show controls" aria-controls="panel" aria-expanded="true" hidden></button>
 
 <p class="toast" id="toast" role="status" hidden>Tap anywhere for the controls</p>
@@ -269,9 +352,20 @@
       <h1 id="scene-meta">Loading the engine…</h1>
       <p class="chords" id="scene-chords"></p>
     </div>
-    <button class="collapse" id="collapse" aria-label="Hide controls">
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6l5 5 5-5"/></svg>
-    </button>
+    <div class="head-actions">
+      <button type="button" class="collapse" id="back-btn" disabled aria-label="Back" title="Back (undo)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12"/></svg>
+      </button>
+      <button type="button" class="collapse" id="forward-btn" disabled aria-label="Forward" title="Forward (redo)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M15 7l5 5-5 5"/><path d="M20 12H10a6 6 0 0 0 0 12"/></svg>
+      </button>
+      <button type="button" class="collapse" id="share-btn" aria-label="Share" title="Share: a link that opens in halation with this sound and look">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+      </button>
+      <button class="collapse" id="collapse" aria-label="Hide controls">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 6l5 5 5-5"/></svg>
+      </button>
+    </div>
   </div>
 
   <div class="transport">
@@ -283,36 +377,28 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/></svg>
       Regen
     </button>
-    <button class="btn" id="back-btn" disabled aria-label="Back to the last scene" title="Back to the last scene">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 0 12"/></svg>
-      Back
-    </button>
+    <label class="chip auto-chip" title="Auto regen: a new scene after this time (the countdown shows the time left)">
+      <span class="auto-next" id="auto-next" aria-live="off"></span>
+      <select id="auto-regen" aria-label="Auto regen">
+        <option value="0">Auto off</option>
+        <option value="1">Auto 1 min</option>
+        <option value="3">Auto 3 min</option>
+        <option value="5">Auto 5 min</option>
+        <option value="10">Auto 10 min</option>
+        <option value="20">Auto 20 min</option>
+        <option value="40">Auto 40 min</option>
+      </select>
+    </label>
   </div>
   <p class="hint" id="hint-start" hidden>Tap Play, then drag the point on the map to change the mood.</p>
 
-  <div class="auto">
-    <label for="auto-regen" data-info="Plays a new scene (a new seed) after this time. The countdown shows the time left.">Auto regen</label>
-    <span class="auto-right">
-      <span class="auto-next" id="auto-next" aria-live="off"></span>
-      <select id="auto-regen">
-        <option value="0">Off</option>
-        <option value="1">Every 1 min</option>
-        <option value="3">Every 3 min</option>
-        <option value="5">Every 5 min</option>
-        <option value="10">Every 10 min</option>
-        <option value="20">Every 20 min</option>
-        <option value="40">Every 40 min</option>
-      </select>
-    </span>
-  </div>
-  <label class="switch" for="randomize"><span data-info="Each Regen and Auto regen also picks random values for every sound setting: the mood, Motifs, Sound bed and Noise bed. The Mix levels and the View stay as they are. Off changes only the seed.">Randomize all</span>
-    <input type="checkbox" id="randomize" role="switch"></label>
 
   <p class="status" id="status" role="status"></p>
 
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
   <form id="settings-form" autocomplete="off">
-    <details open>
-      <summary>Mood</summary>
+    <section class="pane" id="pane-mood" data-tab="mood" data-name="Mood" role="tabpanel" aria-labelledby="tab-mood" hidden>
+      <div class="pane-head"></div>
       <div class="group">
         <div class="map-wrap">
           <div class="map" id="mood-map" tabindex="0" role="group"
@@ -320,112 +406,82 @@
                aria-describedby="map-readout">
             <span class="map-axis top">Active</span><span class="map-axis bottom">Calm</span>
             <span class="map-axis left">Dark</span><span class="map-axis right">Bright</span>
+            <span class="map-range" id="map-range" hidden></span>
             <span class="map-dot" id="map-dot"></span>
           </div>
         </div>
         <p class="note" id="map-readout" aria-live="polite"></p>
       </div>
-    </details>
-    <details open>
-      <summary>Mix</summary>
+    </section>
+    <section class="pane" id="pane-mix" data-tab="mix" data-name="Mix" role="tabpanel" aria-labelledby="tab-mix" hidden>
+      <div class="pane-head"></div>
       <div class="group mix">
         <div class="row" data-key="volume"></div>
         <div class="row" data-key="motifLevel"></div>
+        <div class="fx" data-fx="motif"></div>
         <div class="row" data-key="padLevel"></div>
+        <div class="fx" data-fx="pad"></div>
         <div class="row" data-key="noiseLevel"></div>
-        <button type="button" class="btn small reset" data-reset="mix">Reset Mix</button>
+        <div class="fx" data-fx="noise"></div>
       </div>
-    </details>
-    <details id="more-sound">
-      <summary>More sound</summary>
-      <div class="nested">
-      <details>
-        <summary>Motifs</summary>
-        <div class="group">
-          <div class="row" data-key="motifDensity"></div>
-          <div class="row" data-key="motifNoteLength"></div>
-          <div class="row" data-key="motifArticulation"></div>
-          <div class="stepper octaves"><span data-info="The octave range the motifs play in: from the lowest to the highest. 1 to 7 is the whole range (E1 to C7).">Octaves</span><span class="controls">
-            <button type="button" id="mlow-down" aria-label="Lower the motifs' lowest octave">−</button>
-            <output id="motifOctaveLow-out" aria-label="Motifs' lowest octave">1</output>
-            <button type="button" id="mlow-up" aria-label="Raise the motifs' lowest octave">+</button>
-            <span class="to" aria-hidden="true">to</span>
-            <button type="button" id="mhigh-down" aria-label="Lower the motifs' highest octave">−</button>
-            <output id="motifOctaveHigh-out" aria-label="Motifs' highest octave">7</output>
-            <button type="button" id="mhigh-up" aria-label="Raise the motifs' highest octave">+</button></span></div>
-          <div class="row" data-key="motifReverb"></div>
-          <div class="row" data-key="motifGrit"></div>
-          <button type="button" class="btn small reset" data-reset="motifs">Reset Motifs</button>
-        </div>
-      </details>
-      <details>
-        <summary>Sound bed</summary>
-        <div class="group">
-          <div class="row" data-key="padLength"></div>
-          <div class="row" data-key="padDrift"></div>
-          <div class="row" data-key="padWidth"></div>
-          <div class="stepper octaves"><span data-info="The octave range the sound bed uses: from the lowest to the highest. Motifs have their own range.">Octaves</span><span class="controls">
-            <button type="button" id="low-down" aria-label="Lower the lowest octave">−</button>
-            <output id="padOctaveLow-out" aria-label="Lowest octave">2</output>
-            <button type="button" id="low-up" aria-label="Raise the lowest octave">+</button>
-            <span class="to" aria-hidden="true">to</span>
-            <button type="button" id="high-down" aria-label="Lower the highest octave">−</button>
-            <output id="padOctaveHigh-out" aria-label="Highest octave">5</output>
-            <button type="button" id="high-up" aria-label="Raise the highest octave">+</button></span></div>
-          <div class="row" data-key="padOverlap"></div>
-          <label class="switch" for="revoice"><span data-info="Each time the chords come around again, spread their notes differently. Off repeats the same voicing.">Vary chords</span>
-            <input type="checkbox" id="revoice" role="switch"></label>
-          <div class="auto"><span data-info="How each sound bed note moves to the next chord's note. Glide: one smooth slide. Steps: it jumps through a few random notes of the scale in between, then lands on the new note.">Transition</span>
-            <div class="seg two" role="radiogroup" aria-label="Transition">
-              <button type="button" role="radio" id="transition-0" aria-checked="true">Glide</button>
-              <button type="button" role="radio" id="transition-1" aria-checked="false">Steps</button>
-            </div>
-          </div>
-          <p class="note caption">How notes move to the next chord: Glide slides, Steps walks through notes in between.</p>
-          <button type="button" class="btn small reset" data-reset="pad">Reset Sound bed</button>
-        </div>
-      </details>
-      <details>
-        <summary>Noise bed</summary>
-        <div class="group">
-          <div class="auto"><span data-info="Slowly moves the noise Tone, Pan and Width over time. The level stays where you set it.">Sweep</span>
-            <div class="seg sweep" role="radiogroup" aria-label="Sweep">
-              <button type="button" role="radio" id="sweep-0" aria-checked="true">Off</button>
-              <button type="button" role="radio" id="sweep-1" aria-checked="false">Slow</button>
-              <button type="button" role="radio" id="sweep-3" aria-checked="false">Med</button>
-              <button type="button" role="radio" id="sweep-2" aria-checked="false">Fast</button>
-            </div>
-          </div>
-          <p class="note caption">Sweep moves the noise by itself: its tone, place and width drift over time.</p>
-          <div class="row" data-key="noiseTone"></div>
-          <div class="row" data-key="noisePan"></div>
-          <div class="row" data-key="noiseWidth"></div>
-          <button type="button" class="btn small reset" data-reset="noise">Reset Noise bed</button>
-        </div>
-      </details>
+    </section>
+    <section class="pane" id="pane-motifs" data-tab="motifs" data-name="Motifs" role="tabpanel" aria-labelledby="tab-motifs" hidden>
+      <div class="pane-head"></div>
+      <div class="group">
+        <div class="row" data-key="motifDensity"></div>
+        <div class="row" data-key="motifNoteLength"></div>
+        <div class="row" data-key="motifArticulation"></div>
+        <div class="row octaves" data-sec="motifs" data-oct="motif"><div class="row-top"><span data-info="The octave range the motifs play in: from the lowest to the highest. 1 to 7 is the whole range (E1 to C7).">Octaves</span><output id="motifOctave-out"></output></div></div>
+        <div class="row" data-key="motifReverb"></div>
       </div>
-    </details>
-    <details open>
-      <summary>View</summary>
+    </section>
+    <section class="pane" id="pane-pad" data-tab="pad" data-name="Sound bed" role="tabpanel" aria-labelledby="tab-pad" hidden>
+      <div class="pane-head"></div>
+      <div class="group">
+        <div class="row" data-key="padLength"></div>
+        <div class="row" data-key="padDrift"></div>
+        <div class="row" data-key="padWidth"></div>
+        <div class="row octaves" data-sec="pad" data-oct="pad"><div class="row-top"><span data-info="The octave range the sound bed uses: from the lowest to the highest. Motifs have their own range.">Octaves</span><output id="padOctave-out"></output></div></div>
+        <div class="row" data-key="padOverlap"></div>
+        <div class="auto" data-rnd="pad"><span data-info="How each sound bed note moves to the next chord's note. Glide: one smooth slide. Steps: it jumps through a few random notes of the scale in between, then lands on the new note.">Transition</span>
+          <div class="seg two" role="radiogroup" aria-label="Transition">
+            <button type="button" role="radio" id="transition-0" aria-checked="true">Glide</button>
+            <button type="button" role="radio" id="transition-1" aria-checked="false">Steps</button>
+          </div>
+        </div>
+        <p class="note caption">How notes move to the next chord: Glide slides, Steps walks through notes in between.</p>
+      </div>
+    </section>
+    <section class="pane" id="pane-noise" data-tab="noise" data-name="Noise bed" role="tabpanel" aria-labelledby="tab-noise" hidden>
+      <div class="pane-head"></div>
+      <div class="group">
+        <div class="auto" data-rnd="noise"><span data-info="Slowly moves the noise Tone, Pan and Width over time. The level stays where you set it.">Sweep</span>
+          <div class="seg sweep" role="radiogroup" aria-label="Sweep">
+            <button type="button" role="radio" id="sweep-0" aria-checked="true">Off</button>
+            <button type="button" role="radio" id="sweep-1" aria-checked="false">Slow</button>
+            <button type="button" role="radio" id="sweep-3" aria-checked="false">Med</button>
+            <button type="button" role="radio" id="sweep-2" aria-checked="false">Fast</button>
+          </div>
+        </div>
+        <p class="note caption">Sweep moves the noise by itself: its tone, place and width drift over time.</p>
+        <div class="row" data-key="noiseTone"></div>
+        <div class="row" data-key="noisePan"></div>
+        <div class="row" data-key="noiseWidth"></div>
+      </div>
+    </section>
+    <section class="pane" id="pane-view" data-tab="view" data-name="View" role="tabpanel" aria-labelledby="tab-view" hidden>
+      <div class="pane-head"></div>
       <div class="group" id="view-group">
         <p class="subhead">Shape</p>
-        <div class="seg" role="radiogroup" aria-label="Visualization">
+        <div class="seg" role="radiogroup" aria-label="Visualization" data-rnd="view">
           <button type="button" role="radio" aria-checked="true" id="viz-shapes">Ring</button>
           <button type="button" role="radio" aria-checked="false" id="viz-traces">Lat</button>
           <button type="button" role="radio" aria-checked="false" id="viz-columns">Lon</button>
           <button type="button" role="radio" aria-checked="false" id="viz-weave">Mesh</button>
           <button type="button" role="radio" aria-checked="false" id="viz-none">None</button>
         </div>
-        <div class="auto">
-          <span data-info="Particles that show the noise bed. Grain: drifting specks; brighter noise is finer and faster, and louder noise adds more. Flock: particles that flock on the noise bed's wind, are drawn into the lines and vanish into them; Noise Tone sets how fast they fly.">Particles</span>
-          <div class="seg bg" role="radiogroup" aria-label="Particles">
-            <button type="button" role="radio" id="particles-0" aria-checked="false">Off</button>
-            <button type="button" role="radio" id="particles-1" aria-checked="false">Grain</button>
-            <button type="button" role="radio" id="particles-2" aria-checked="true">Flock</button>
-          </div>
-        </div>
         <p class="subhead">Color</p>
-        <div class="auto">
+        <div class="auto" data-rnd="view">
           <span data-info="Dark: the light on black. Light: the light drawn dark on white, in its color (white shows black). Color: the light color fills the screen and the lines are black; this turns Rainbow off. Custom: choose the background, line and glow colors.">Theme</span>
           <div class="seg theme" role="radiogroup" aria-label="Theme">
             <button type="button" role="radio" id="bg-0" aria-checked="true">Dark</button>
@@ -434,7 +490,7 @@
             <button type="button" role="radio" id="bg-3" aria-checked="false">Custom</button>
           </div>
         </div>
-        <div id="light-color-rows">
+        <div id="light-color-rows" data-rnd="view">
           <div class="row-top"><span data-info="The color of the visualization's light. In the Custom theme it sets the line color.">Color</span><output id="color-out"></output></div>
           <div class="swatches" id="swatches" role="radiogroup" aria-label="Color"></div>
         </div>
@@ -451,46 +507,52 @@
               <button type="button" class="swatch rainbow" role="radio" id="theme-glow-rainbow" aria-label="Rainbow glow"></button>
               <label class="custom" id="theme-glow" role="radio" title="Glow color">+<input type="color" aria-label="Glow color"></label></div></div>
         </div>
-        <label class="switch" for="cycle"><span data-info="The light slowly drifts around the color wheel.">Auto cycle</span>
-          <input type="checkbox" id="cycle" role="switch"></label>
-        <div class="row" id="cycle-row" hidden>
-          <div class="row-top"><label for="cycle-speed" data-info="The time for one full turn of the color wheel.">Cycle speed</label><output id="cycle-out" for="cycle-speed"></output></div>
-          <input type="range" id="cycle-speed" min="0" max="1" step="0.001">
+        <div class="adv adv-view">
+        <p class="subhead">Particles</p>
+        <div class="auto" data-rnd="view">
+          <span data-info="Particles that show the noise bed. Grain: drifting specks; brighter noise is finer and faster, and louder noise adds more. Flock: particles that flock on the noise bed's wind, are drawn into the lines and vanish into them; Noise Tone sets how fast they fly.">Particles</span>
+          <div class="seg bg" role="radiogroup" aria-label="Particles">
+            <button type="button" role="radio" id="particles-0" aria-checked="false">Off</button>
+            <button type="button" role="radio" id="particles-1" aria-checked="false">Grain</button>
+            <button type="button" role="radio" id="particles-2" aria-checked="true">Flock</button>
+          </div>
         </div>
-        <details class="sub">
-          <summary>More view</summary>
-          <div class="group">
         <p class="subhead">Light</p>
-        <div class="row">
+        <div class="row" data-rnd="view">
           <div class="row-top"><label for="glow" data-info="How much the light blooms around each line.">Glow</label><output id="glow-out" for="glow"></output></div>
           <input type="range" id="glow" min="0" max="1.25" step="0.01">
         </div>
-        <div class="row">
+        <div class="row" data-rnd="view">
           <div class="row-top"><label for="burn" data-info="How long the light stays before it fades.">Burn-in</label><output id="burn-out" for="burn"></output></div>
           <input type="range" id="burn" min="0" max="1.25" step="0.01">
         </div>
-        <p class="subhead">Touch</p>
-        <label class="switch" for="touch-play"><span data-info="Press the screen for a note where its pitch is drawn. Hold and drag to glide.">Play by touch</span>
-          <input type="checkbox" id="touch-play" role="switch"></label>
+        </div>
+      </div>
+    </section>
+    <section class="pane" id="pane-library" data-tab="library" data-name="Library" role="tabpanel" aria-labelledby="tab-library" hidden>
+      <div class="pane-head"></div>
+      <div class="group">
+        <div class="line">
+          <div class="seg two" role="tablist" aria-label="Library">
+            <button type="button" role="tab" id="lib-saved" aria-selected="true">Saved</button>
+            <button type="button" role="tab" id="lib-recent" aria-selected="false">Recent</button>
           </div>
-        </details>
+          <span class="lib-actions"><button type="button" class="btn small" id="saved-edit" aria-pressed="false">Edit</button>
+          <button type="button" class="btn small" id="save-btn">Save current</button></span>
+        </div>
+        <div id="lib-recent-pane" hidden>
+          <p class="note">Every change, newest first. Save keeps one in Saved.</p>
+          <ul class="saved" id="recent-list"></ul>
+          <button type="button" class="btn small" id="recent-more" hidden></button>
+        </div>
+        <div id="lib-saved-pane">
+          <ul class="saved" id="saved-list"></ul>
+        </div>
       </div>
-    </details>
-    <details>
-      <summary>Saved</summary>
+    </section>
+    <section class="pane" id="pane-settings" data-tab="settings" data-name="Settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <div class="pane-head"></div>
       <div class="group">
-        <div class="line"><span>Sound and view, on this device</span>
-          <button type="button" class="btn small" id="save-btn">Save current</button></div>
-        <ul class="saved" id="saved-list"></ul>
-      </div>
-    </details>
-    <details>
-      <summary>Scene</summary>
-      <div class="group">
-        <div class="line"><span id="seed-label">Seed</span>
-          <button type="button" class="btn small" id="share-btn" data-info="A link that opens in halation with this sound and look.">Share</button></div>
-        <div class="line"><span id="engine-label"></span>
-          <button type="button" class="btn small" id="reset-btn">Reset to defaults</button></div>
         <div class="auto">
           <span data-info="Light or dark controls. System follows the phone or computer setting. The visualization keeps its own Theme.">Appearance</span>
           <div class="seg bg" role="radiogroup" aria-label="Appearance">
@@ -499,8 +561,12 @@
             <button type="button" role="radio" id="appearance-dark" aria-checked="false">Dark</button>
           </div>
         </div>
+        <label class="switch" for="touch-play"><span data-info="Press the screen for a note where its pitch is drawn. Hold and drag to glide.">Play by touch</span>
+          <input type="checkbox" id="touch-play" role="switch"></label>
+        <div class="line"><span class="fine"><span id="seed-label">Seed</span> · <span id="engine-label"></span></span>
+          <button type="button" class="btn small" id="reset-btn">Reset to defaults</button></div>
       </div>
-    </details>
+    </section>
   </form>
 </aside>
 
@@ -509,13 +575,16 @@
 (() => {
   const LABELS = {
     padLength: 'Length', padDrift: 'Drift', padWidth: 'Width', padOverlap: 'Blend', noiseLevel: 'Noise bed', noiseTone: 'Tone', noisePan: 'Pan', noiseWidth: 'Width',
-    motifDensity: 'Density', motifNoteLength: 'Note length', motifArticulation: 'Smoothness', motifReverb: 'Reverb', motifGrit: 'Grit', motifLevel: 'Motifs',
+    motifDensity: 'Density', motifNoteLength: 'Note length', motifArticulation: 'Smoothness', motifReverb: 'Reverb', motifLevel: 'Motifs',
     padLevel: 'Sound bed', volume: 'Volume',
   };
+  // Sliders shown the other way round from their stored value (Smoothness: smooth at the
+  // right, while motifArticulation is 0 legato .. 1 staccato).
+  const INVERTED = new Set(['motifArticulation']);
   // Words at the two ends of a slider, shown instead of a number (for people new to it).
   const ENDS = {
-    motifDensity: ['rare', 'often'], motifNoteLength: ['short', 'long'], motifArticulation: ['smooth', 'detached'],
-    motifReverb: ['dry', 'spacious'], motifGrit: ['clean', 'gritty'],
+    motifDensity: ['rare', 'often'], motifNoteLength: ['short', 'long'], motifArticulation: ['detached', 'smooth'],
+    motifReverb: ['dry', 'spacious'],
     padLength: ['short', 'long'], padDrift: ['still', 'moving'], padWidth: ['close', 'wide'], padOverlap: ['separate', 'blended'],
     noiseTone: ['dark', 'bright'], noisePan: ['left', 'right'], noiseWidth: ['narrow', 'wide'],
   };
@@ -529,11 +598,10 @@
     noiseTone: 'How bright the noise bed is: low is a dark rumble, high is a bright hiss.',
     noisePan: 'Where the noise bed sits, from left (L) through the centre (C) to right (R).',
     noiseWidth: 'How far apart the two sides of the noise bed are: low is one narrow point, high is wide left and right.',
-    motifGrit: 'Makes the motifs rough and grainy, like an old sampler. Off at the left.',
     motifReverb: 'How much room the motifs ring in: low is dry and close, high is a large space that sets them back.',
     motifDensity: 'How often motifs (short melodies and runs, over every octave, bass included) play.',
     motifNoteLength: 'How long each motif note lasts.',
-    motifArticulation: 'Legato (low: notes flow into each other, soft) to staccato (high: short, detached notes with gaps).',
+    motifArticulation: 'Short, detached notes with gaps (left) to smooth notes that flow into each other (right).',
     motifLevel: 'How loud the motifs are.',
     padLevel: 'How loud the sound bed (the sustained chords under everything) is.',
     volume: 'The output level. It changes live, with no new scene.',
@@ -547,7 +615,10 @@
   const MOOD_POINTS = [[0.6, 0.3], [0.9, 0.1], [0.42, 0.3], [0.75, 0.35], [0.58, 0.3], [0.88, 0.55],
                        [0.25, 0.1], [0.08, 0.7], [0.42, 0.9]];
   const AUTO_STORE = 'in-halation.autoRegen';   // minutes; 0 = off
-  const RANDOM_STORE = 'in-halation.randomize';  // '1': Regen and Auto regen randomize every sound setting
+  const RANDOM_STORE = 'in-halation.random';    // { sections: [ids], ranges: { key: [low, high] } }
+  const OLD_RANDOM_STORE = 'in-halation.randomize';   // '1' = the old Randomize all
+  const HISTORY_STORE = 'in-halation.history';
+  const TAB_STORE = 'in-halation.tab';          // the open section tab  // { steps: [{ at, label, link }], index }
   const SAVED_STORE = 'in-halation.saved';      // [{ at, query, view, display, auto }]
   const STORE = 'in-halation.query', VIZ_STORE = 'in-halation.viz', DISPLAY_STORE = 'in-halation.display', TOUCH_STORE = 'in-halation.touchPlay';
   // View ids are their index here (0 Ring, 2 Lat, 3 Lon, 4 Mesh, 5 None). Id 1 was Trail
@@ -597,7 +668,14 @@
                        catch (e) { return { ...DISPLAY_DEFAULTS }; } })(),
     touchPlay: store.get(TOUCH_STORE) === '1', pointers: new Map(),
     autoMinutes: Number(store.get(AUTO_STORE)) || 0, autoTimer: 0, autoAt: 0,
-    randomize: store.get(RANDOM_STORE) === '1',   // total randomization on each regen
+    // Random sections (dice) and their ranges. The old Randomize all opens as the four sound sections.
+    random: (() => {
+      try {
+        const r = JSON.parse(store.get(RANDOM_STORE) || 'null');
+        if (r && Array.isArray(r.sections)) return { sections: r.sections, ranges: r.ranges || {} };
+      } catch (e) { /* unreadable: start empty */ }
+      return { sections: store.get(OLD_RANDOM_STORE) === '1' ? ['mood', 'motifs', 'pad', 'noise'] : [], ranges: {} };
+    })(),
     pending: 0, suspendTimer: 0,
     viz: (() => {   // stored as a numeric id; older saved names are still read
       const v = store.get(VIZ_STORE);
@@ -619,11 +697,12 @@
       `&motifLevel=${n(s.motifLevel)}&padLevel=${n(s.padLevel)}&noiseLevel=${n(s.noiseLevel)}` +
       `&motifDensity=${n(s.motifDensity)}&motifNoteLength=${n(s.motifNoteLength)}&motifArticulation=${n(s.motifArticulation)}` +
       `&motifOctaveLow=${s.motifOctaveLow}&motifOctaveHigh=${s.motifOctaveHigh}&motifReverb=${n(s.motifReverb)}` +
-      `&motifGrit=${n(s.motifGrit)}` +
       `&padLength=${n(s.padLength)}&padDrift=${n(s.padDrift)}&padWidth=${n(s.padWidth)}` +
       `&padOctaveLow=${s.padOctaveLow}&padOctaveHigh=${s.padOctaveHigh}&padOverlap=${n(s.padOverlap)}` +
-      `&padRevoice=${s.padRevoice ? 1 : 0}&padTransition=${s.padTransition || 0}` +
-      `&noiseSweep=${s.noiseSweep || 0}&noiseTone=${n(s.noiseTone)}&noisePan=${n(s.noisePan)}&noiseWidth=${n(s.noiseWidth)}`;
+      `&padTransition=${s.padTransition || 0}` +
+      `&noiseSweep=${s.noiseSweep || 0}&noiseTone=${n(s.noiseTone)}&noisePan=${n(s.noisePan)}&noiseWidth=${n(s.noiseWidth)}` +
+      `&motifFx=${s.motifFx || 0}&motifFxAmount=${n(s.motifFxAmount ?? 0.5)}&padFx=${s.padFx || 0}&padFxAmount=${n(s.padFxAmount ?? 0.5)}` +
+      `&noiseFx=${s.noiseFx || 0}&noiseFxAmount=${n(s.noiseFxAmount ?? 0.5)}`;
   }
 
   function parse(q) {
@@ -642,7 +721,7 @@
     return parsed;
   }
 
-  const save = () => store.set(STORE, query());
+  const save = () => { store.set(STORE, query()); noteChange(); };
 
   function preview() {
     if (state.local) {
@@ -721,13 +800,14 @@
     }
     else if (m.type === 'scene') {
       if (m.auto) {   // the worklet regenerated on its own (auto regen on the audio clock)
-        remember();
         state.seed = m.scene.seed;
-        if (m.query && state.randomize) {   // it also randomized the settings
+        if (m.query && soundMask()) {   // it also randomized the sound sections whose dice is on
           state.settings = parse(m.query).traits;
           syncControls();
         }
+        if (randomOn('view')) randomizeView();
         save();
+        recordStep('Auto regen');
         state.autoAt = Date.now() + state.autoMinutes * 60000;
       }
       state.scene = m.scene;
@@ -782,7 +862,7 @@
     state.autoAt = 0;
     const seconds = state.playing && state.autoMinutes ? state.autoMinutes * 60 : 0;
     if (state.kind === 'wasm' && state.node) {
-      state.node.port.postMessage({ type: 'randomize', value: state.randomize });
+      state.node.port.postMessage({ type: 'randomize', sections: soundMask(), ranges: state.random.ranges });
       state.node.port.postMessage({ type: 'autoRegen', seconds });
     }
     if (!seconds) return;
@@ -804,41 +884,173 @@
     if (el.textContent !== text) el.textContent = text;
   }
 
-  // Back: the scenes before each Regen and Auto regen (seed and settings), newest last.
-  const history = [];
-  function remember() {
-    history.push(query());
-    if (history.length > 20) history.shift();
-    $('back-btn').disabled = false;
+  let resetSection = () => {};   // set in buildControls
+
+  // ---- random sections ------------------------------------------------------------------
+  // A section's dice on = Regen and Auto regen randomize it ("random mode": its sliders show
+  // ranges, its other controls are set only by randomizing). Bits match the core
+  // (ih_randomize_query); the View is randomized here.
+  const SECTION_BITS = { mood: 1, motifs: 2, pad: 4, noise: 8, mixLevels: 16, mixFx: 32 };
+  const SECTION_NAMES = { mood: 'Mood', motifs: 'Motifs', pad: 'Sound bed', noise: 'Noise bed', mixLevels: 'Mix levels', mixFx: 'Mix FX', view: 'View' };
+  const randomOn = (id) => state.random.sections.includes(id);
+  const soundMask = () => state.random.sections.reduce((m, id) => m | (SECTION_BITS[id] || 0), 0);
+  // Which section a range belongs to (the core's continuous settings of each section).
+  const KEY_SECTION = {};
+  for (const [bit, keys] of Object.entries(InHalationWasm.RANDOM_KEYS))
+    for (const key of keys) KEY_SECTION[key] = Object.keys(SECTION_BITS).find((id) => SECTION_BITS[id] === Number(bit));
+  const rangeOf = (key) => state.random.ranges[key] || [0, 1];
+
+  function storeRandom() {
+    store.set(RANDOM_STORE, JSON.stringify(state.random));
+    if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'randomize', sections: soundMask(), ranges: state.random.ranges });
   }
-  function back() {
-    const q = history.pop();
-    $('back-btn').disabled = !history.length;
-    if (!q) return;
-    const parsed = parse(q);
-    state.settings = parsed.traits;
-    state.seed = parsed.seed;
+  function setRandom(id, on) {
+    state.random.sections = on ? [...new Set([...state.random.sections, id])] : state.random.sections.filter((x) => x !== id);
+    storeRandom();
     syncControls();
-    setVolume(state.settings.volume);
-    if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
-    save();
-    preview();
-    if (state.playing) play();
+    syncDice();
+  }
+  function syncDice() {
+    document.querySelectorAll('.pane-head .dice').forEach((b) => b.setAttribute('aria-pressed', String(randomOn(b.dataset.section))));
+  }
+
+  // View: a random shape (not None), particles, theme (not Custom) and a preset color or Rainbow.
+  function randomizeView() {
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    setViz(VIEWS[pick([0, 2, 3, 4])]);
+    const theme = pick([0, 1, 2]);
+    const color = pick([...COLORS.map(([, hex]) => hex), ...(theme === 2 ? [] : ['rainbow'])]);
+    const amount = () => Math.round(100 * (0.3 + 0.7 * Math.random())) / 100;   // Glow and Burn-in: 0.3 … 1
+    setDisplay({ theme, particles: pick([0, 1, 2]), rainbow: color === 'rainbow', ...(color === 'rainbow' ? {} : { color }),
+                 glow: amount(), burnIn: amount() });
+  }
+
+  // Randomize one section once, now (the seed stays: the same scene with new settings).
+  function randomizeSection(id) {
+    if (id === 'view') randomizeView();
+    else if (state.local) {
+      const keep = state.seed;
+      state.settings = parse(state.local.randomizeQuery(query(), randomSeed(), SECTION_BITS[id], state.random.ranges)).traits;
+      state.seed = keep;
+      syncControls();
+      setVolume(state.settings.volume);
+      if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
+      soundChanged();
+    } else {
+      status('Randomize needs the WebAssembly engine.');
+      return;
+    }
+    recordStep(`Randomize ${SECTION_NAMES[id]}`);
   }
 
   function regen() {
-    remember();
     state.seed = randomSeed();
-    // Randomize all: every sound setting gets a random value (the core picks them, from the
-    // seed; Volume is kept). Needs the WebAssembly core.
-    if (state.randomize && state.local) {
-      state.settings = parse(state.local.randomizeQuery(query(), state.seed)).traits;
+    // The sound sections whose dice is on get random values (the core picks them from the
+    // seed, inside their ranges; Volume is kept). Needs the WebAssembly core.
+    if (soundMask() && state.local) {
+      state.settings = parse(state.local.randomizeQuery(query(), state.seed, soundMask(), state.random.ranges)).traits;
       syncControls();
+      setVolume(state.settings.volume);
       if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
     }
+    if (randomOn('view')) randomizeView();
     save();
     preview();
     if (state.playing) play();
+    recordStep('Regen');
+  }
+
+  // ---- history ------------------------------------------------------------------------
+  // Every change is a step (changes within 2 s merge); Regen, Auto regen, Randomize, Reset, a
+  // Saved load and an opened link are a step at once. A step is the whole state as a share
+  // link (sound and View). Back and Forward move through the steps; the last 50 are kept.
+  const steps = (() => {
+    try {
+      const h = JSON.parse(store.get(HISTORY_STORE) || 'null');
+      if (h && Array.isArray(h.steps)) return { list: h.steps.slice(-50), index: Math.min(h.index ?? h.steps.length - 1, h.steps.length - 1) };
+    } catch (e) { /* unreadable: start empty */ }
+    return { list: [], index: -1 };
+  })();
+  let pendingStep = 0, restoring = false;
+  const fragmentNow = () => shareLink().split('#')[1];
+  // Names for "what changed" (the diff of two steps).
+  const KEY_NAMES = () => ({
+    ...LABELS, light: 'Mood', energy: 'Mood', seed: 'Scene', motifOctaveLow: 'Motif octaves', motifOctaveHigh: 'Motif octaves',
+    padOctaveLow: 'Sound bed octaves', padOctaveHigh: 'Sound bed octaves', padTransition: 'Transition', noiseSweep: 'Sweep',
+    motifFx: 'Motifs FX', motifFxAmount: 'Motifs FX', padFx: 'Sound bed FX', padFxAmount: 'Sound bed FX', noiseFx: 'Noise bed FX',
+    noiseFxAmount: 'Noise bed FX', motifLevel: 'Motifs level', padLevel: 'Sound bed level', noiseLevel: 'Noise bed level',
+    shape: 'Shape', particles: 'Particles', theme: 'Theme', color: 'Color', rainbow: 'Color', colorCycle: 'Auto cycle',
+    colorCycleSeconds: 'Cycle speed', glow: 'Glow', burnIn: 'Burn-in', themeBackground: 'Theme colors', themeLines: 'Theme colors', themeGlow: 'Theme colors',
+  });
+  function describe(before, after) {
+    const a = new URLSearchParams(before || ''), b = new URLSearchParams(after), names = KEY_NAMES(), out = [];
+    for (const [k, v] of b) if (a.get(k) !== v && k !== 'v') { const n = names[k] || k; if (!out.includes(n)) out.push(n); }
+    return out.length ? out.slice(0, 3).join(', ') + (out.length > 3 ? ' …' : '') : 'No change';
+  }
+  function storeSteps() {
+    store.set(HISTORY_STORE, JSON.stringify({ steps: steps.list, index: steps.index }));
+    $('back-btn').disabled = steps.index <= 0;
+    $('forward-btn').disabled = steps.index >= steps.list.length - 1;
+    renderRecent();
+  }
+  // A new step now (with a label), unless nothing changed since the current one.
+  function recordStep(label) {
+    clearTimeout(pendingStep);
+    pendingStep = 0;
+    if (restoring || !state.settings) return;
+    const link = fragmentNow(), cur = steps.list[steps.index];
+    if (cur && cur.link === link) return;
+    steps.list = steps.list.slice(0, steps.index + 1);   // a change after Back drops the steps ahead
+    steps.list.push({ at: Date.now(), label: label || describe(cur && cur.link, link), link });
+    if (steps.list.length > 50) steps.list.shift();
+    steps.index = steps.list.length - 1;
+    storeSteps();
+  }
+  // Any setting change: a step 2 s after the last change.
+  function noteChange() {
+    if (restoring) return;
+    clearTimeout(pendingStep);
+    pendingStep = setTimeout(() => recordStep(), 2000);
+  }
+  function goToStep(i) {
+    if (pendingStep) recordStep();   // keep a change that is still waiting
+    if (i < 0 || i >= steps.list.length) return;
+    steps.index = i;
+    restoring = true;
+    applyFragment(steps.list[i].link);
+    restoring = false;
+    storeSteps();
+  }
+  // Back: to the step before the current one, or, with a change still waiting, to the current
+  // step (the state before that change). Forward: the next step.
+  const back = () => goToStep(pendingStep ? steps.index : steps.index - 1);
+  const forward = () => goToStep(steps.index + 1);
+  // Recent shows the 10 newest steps; "Show all" shows the rest (up to 50).
+  let recentAll = false;
+  function renderRecent() {
+    const ul = $('recent-list');
+    if (!ul) return;
+    const all = steps.list.map((step, i) => ({ step, i })).reverse();
+    const shown = recentAll ? all : all.slice(0, 10);
+    const more = $('recent-more');
+    more.hidden = all.length <= 10;
+    more.textContent = recentAll ? 'Show fewer' : `Show all (${all.length})`;
+    ul.replaceChildren(...shown.map(({ step, i }) => {
+      const li = document.createElement('li');
+      const what = Object.assign(document.createElement('span'), { className: 'what', textContent: step.label });
+      const when = Object.assign(document.createElement('span'), { className: 'when',
+        textContent: new Date(step.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }) });
+      what.append(when);
+      const restore = i === steps.index
+        ? Object.assign(document.createElement('span'), { className: 'recent-now', textContent: 'now' })
+        : Object.assign(document.createElement('button'), { type: 'button', className: 'btn small', textContent: 'Restore' });
+      if (i !== steps.index) restore.addEventListener('click', () => goToStep(i));
+      const keep = Object.assign(document.createElement('button'), { type: 'button', className: 'btn small', textContent: 'Save' });
+      keep.setAttribute('aria-label', `Save ${step.label} to Saved`);
+      keep.addEventListener('click', () => saveStep(step));
+      li.append(swatchFor(step.link), what, restore, keep);
+      return li;
+    }));
   }
 
   function soundChanged() {
@@ -885,12 +1097,17 @@
   const panelOpen = () => $('panel').classList.contains('open');
 
   function setViz(mode) {
+    const from = state.viz;
     state.viz = mode;
     store.set(VIZ_STORE, String(VIEWS.indexOf(mode)));
+    noteChange();
     $('viz-shapes').setAttribute('aria-checked', String(mode === 'shapes'));
     for (const m of ['traces', 'columns', 'weave', 'none']) $(`viz-${m}`).setAttribute('aria-checked', String(mode === m));
-    clearLayer();
+    // A new shape fades in while the old one fades out (both are drawn), over VIZ_FADE s.
+    if (from && from !== mode) vizFade = { from, t: 0 };
   }
+  const VIZ_FADE = 1.2;   // seconds
+  let vizFade = null;     // { from, t }: a shape change in progress
 
   // Slider value text: Pan shows L/C/R; the others show two decimals.
   function fmt(key, v) {
@@ -909,30 +1126,68 @@
         <input type="range" id="${key}" min="0" max="${key === 'volume' ? 1.5 : 1}" step="0.01">` +
         (ends ? `<div class="ends" aria-hidden="true"><span>${ends[0]}</span><span>${ends[1]}</span></div>` : '');
       row.querySelector('input').addEventListener('input', (e) => {
-        state.settings[key] = Number(e.target.value);
+        state.settings[key] = INVERTED.has(key) ? Number((1 - Number(e.target.value)).toFixed(3)) : Number(e.target.value);
         $(`${key}-out`).textContent = fmt(key, state.settings[key]);
         if (key === 'volume') { setVolume(state.settings.volume); save(); } else soundChanged();
       });
     });
-    // Octave steppers: sound bed 1..6, motifs 1..7; low and high push each other.
-    const step = (key, delta) => {
-      const s = state.settings;
-      const motif = key.startsWith('motif');
-      const low = motif ? 'motifOctaveLow' : 'padOctaveLow', high = motif ? 'motifOctaveHigh' : 'padOctaveHigh';
-      s[key] = Math.min(motif ? 7 : 6, Math.max(1, s[key] + delta));
-      if (s[low] > s[high]) key === low ? (s[high] = s[low]) : (s[low] = s[high]);
-      syncControls();
-      soundChanged();
-    };
-    $('mlow-down').addEventListener('click', () => step('motifOctaveLow', -1));
-    $('mlow-up').addEventListener('click', () => step('motifOctaveLow', 1));
-    $('mhigh-down').addEventListener('click', () => step('motifOctaveHigh', -1));
-    $('mhigh-up').addEventListener('click', () => step('motifOctaveHigh', 1));
-    $('low-down').addEventListener('click', () => step('padOctaveLow', -1));
-    $('low-up').addEventListener('click', () => step('padOctaveLow', 1));
-    $('high-down').addEventListener('click', () => step('padOctaveHigh', -1));
-    $('high-up').addEventListener('click', () => step('padOctaveHigh', 1));
-    $('revoice').addEventListener('change', (e) => { state.settings.padRevoice = e.target.checked; soundChanged(); });
+    // Layer FX in the Mix: a type (0 None, 1 Crush, 2 Drive; ids stable) and an amount.
+    const FX_NAMES = { motif: 'Motifs', pad: 'Sound bed', noise: 'Noise bed' };
+    document.querySelectorAll('.fx[data-fx]').forEach((row) => {
+      const layer = row.dataset.fx, type = `${layer}Fx`, amount = `${layer}FxAmount`;
+      row.innerHTML = `<span>FX amount</span>
+        <input type="range" id="${amount}" min="0" max="1" step="0.01" aria-label="${FX_NAMES[layer]} FX amount" hidden>
+        <output id="${amount}-out" hidden></output>`;
+      // The FX type: a chip at the end of the layer's level line.
+      const chip = document.createElement('label');
+      chip.className = 'chip fx-chip';
+      chip.dataset.fx = layer;
+      chip.title = `An effect on the ${FX_NAMES[layer].toLowerCase()}: Crush makes it grainy and lo-fi, like an old sampler; Drive makes it warm and saturated.`;
+      chip.innerHTML = `<select aria-label="${FX_NAMES[layer]} FX">${['No FX', 'Crush', 'Drive'].map((t, i) => `<option value="${i}">${t}</option>`).join('')}</select>`;
+      chip.querySelector('select').addEventListener('change', (e) => {
+        state.settings[type] = Number(e.target.value);
+        syncControls();
+        soundChanged();
+      });
+      row.previousElementSibling.append(chip);
+      $(amount).addEventListener('input', (e) => {
+        state.settings[amount] = Number(e.target.value);
+        $(`${amount}-out`).textContent = state.settings[amount].toFixed(2);
+        soundChanged();
+      });
+    });
+    // Octaves: a range slider in whole octaves (sound bed 1..6, motifs 1..7); a thumb
+    // dragged past the other one pushes it along. In random mode it sets the octaves Regen
+    // may pick from (ranges.motifOctaves / padOctaves), with marks at the current ones.
+    document.querySelectorAll('.row[data-oct]').forEach((row) => {
+      const p = row.dataset.oct, max = OCT_MAX[p], who = p === 'motif' ? "motifs'" : "sound bed's";
+      const dual = document.createElement('div');
+      dual.className = 'dual oct-range';
+      dual.innerHTML = '<span class="band"></span>' +
+        Array.from({ length: max }, (_, i) => `<span class="tick" style="left: ${octPos(i / (max - 1))}"></span>`).join('') +
+        `<input type="range" min="1" max="${max}" step="1" aria-label="The ${who} lowest octave">` +
+        `<input type="range" min="1" max="${max}" step="1" aria-label="The ${who} highest octave">` +
+        '<span class="mark"></span><span class="mark"></span>';
+      const [lo, hi] = dual.querySelectorAll('input');
+      const set = (moved) => {
+        const s = state.settings, low = `${p}OctaveLow`, high = `${p}OctaveHigh`;
+        let a = Number(lo.value), b = Number(hi.value);
+        if (a > b) moved === lo ? (b = a) : (a = b);
+        if (randomOn(row.dataset.sec)) {
+          state.random.ranges[`${p}Octaves`] = [a, b];
+          storeRandom();
+          syncControls();
+          return;
+        }
+        if (s[low] === a && s[high] === b) { syncControls(); return; }
+        s[low] = a; s[high] = b;
+        syncControls();
+        soundChanged();
+      };
+      lo.addEventListener('input', () => set(lo));
+      hi.addEventListener('input', () => set(hi));
+      row.append(dual);
+    });
     // Transition ids: 0 portamento (Glide), 1 stepped (Steps).
     [0, 1].forEach((mode) => $(`transition-${mode}`).addEventListener('click', () => {
       state.settings.padTransition = mode;
@@ -948,30 +1203,213 @@
       syncSweepControls();
     }));
     $('back-btn').addEventListener('click', back);
+    $('forward-btn').addEventListener('click', forward);
+    // Dice in the section headers (Mix has two: levels and FX). A click doesn't open or close
+    // the section.
+    const DICE = { Mood: ['mood'], Mix: ['mixLevels', 'mixFx'], Motifs: ['motifs'], 'Sound bed': ['pad'], 'Noise bed': ['noise'], View: ['view'] };
+    const diceIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>';
+    document.querySelectorAll('.pane').forEach((pane) => {
+      const sum = pane.querySelector('.pane-head'), ids = DICE[pane.dataset.name];
+      if (!ids) return;
+      for (const id of ids) {
+        const b = Object.assign(document.createElement('button'), { type: 'button', className: 'dice' });
+        b.dataset.section = id;
+        b.innerHTML = diceIcon + (ids.length > 1 ? (id === 'mixFx' ? 'FX' : 'Levels') : '');
+        b.setAttribute('aria-label', `Randomize ${SECTION_NAMES[id]} on Regen`);
+        b.title = `On: Regen and Auto regen randomize ${SECTION_NAMES[id]} (sliders set the range)`;
+        b.addEventListener('click', () => setRandom(id, !randomOn(id)));
+        sum.append(b);
+      }
+    });
+    syncDice();
+    // Section menus (⋯): Randomize now and Reset, in the header instead of buttons in the section.
+    const MENUS = {
+      Mood: [['Randomize', () => randomizeSection('mood')], ['Reset', () => resetSection('mood')]],
+      Mix: [['Randomize levels', () => randomizeSection('mixLevels')], ['Randomize FX', () => randomizeSection('mixFx')], ['Reset', () => resetSection('mix')]],
+      Motifs: [['Randomize', () => randomizeSection('motifs')], ['Reset', () => resetSection('motifs')]],
+      'Sound bed': [['Randomize', () => randomizeSection('pad')], ['Reset', () => resetSection('pad')]],
+      'Noise bed': [['Randomize', () => randomizeSection('noise')], ['Reset', () => resetSection('noise')]],
+      View: [['Randomize', () => randomizeSection('view')]],
+    };
+    let openMenu = null;
+    const closeMenu = () => { if (openMenu) { openMenu.btn.setAttribute('aria-expanded', 'false'); openMenu.el.remove(); openMenu = null; } };
+    document.querySelectorAll('.pane').forEach((pane) => {
+      const sum = pane.querySelector('.pane-head'), title = pane.dataset.name, items = MENUS[title];
+      if (!items) return;
+      const btn = Object.assign(document.createElement('button'), { type: 'button', className: 'more', textContent: '⋯' });
+      btn.setAttribute('aria-label', `${title} actions`);
+      btn.setAttribute('aria-haspopup', 'menu');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const was = openMenu && openMenu.btn === btn;
+        closeMenu();
+        if (was) return;
+        const el = Object.assign(document.createElement('div'), { className: 'menu' });
+        el.setAttribute('role', 'menu');
+        for (const [label, act] of items) {
+          const b = Object.assign(document.createElement('button'), { type: 'button', textContent: label });
+          b.setAttribute('role', 'menuitem');
+          b.addEventListener('click', () => { closeMenu(); act(); });
+          el.append(b);
+        }
+        document.body.append(el);
+        const r = btn.getBoundingClientRect();
+        el.style.top = `${Math.min(innerHeight - el.offsetHeight - 8, r.bottom + 4)}px`;
+        el.style.left = `${Math.max(8, r.right - el.offsetWidth)}px`;
+        btn.setAttribute('aria-expanded', 'true');
+        openMenu = { btn, el };
+        el.querySelector('button').focus();
+      });
+      sum.append(btn);
+    });
+    document.addEventListener('pointerdown', (e) => { if (openMenu && !openMenu.el.contains(e.target) && e.target !== openMenu.btn) closeMenu(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && openMenu) { e.stopPropagation(); openMenu.btn.focus(); closeMenu(); } }, true);
+    $('panel').addEventListener('scroll', closeMenu, { passive: true });
+    // Library: Saved | Recent. Delete in Saved only after Edit (so nothing goes by accident).
+    const libTab = (saved) => {
+      $('lib-recent').setAttribute('aria-selected', String(!saved));
+      $('lib-saved').setAttribute('aria-selected', String(saved));
+      $('lib-recent-pane').hidden = saved;
+      $('lib-saved-pane').hidden = !saved;
+      $('saved-edit').hidden = !saved;
+      if (!saved && savedEditing) { savedEditing = false; syncSavedEdit(); }
+    };
+    $('saved-edit').addEventListener('click', () => { savedEditing = !savedEditing; syncSavedEdit(); });
+    $('lib-recent').addEventListener('click', () => libTab(false));
+    $('recent-more').addEventListener('click', () => { recentAll = !recentAll; renderRecent(); });
+    $('lib-saved').addEventListener('click', () => libTab(true));
+    $('save-btn').addEventListener('click', () => libTab(true));
+    // Section tabs: one section at a time; the row scrolls sideways. The open tab is kept.
+    const TAB_ORDER = ['mood', 'mix', 'motifs', 'pad', 'noise', 'view', 'library', 'settings'];
+    const nav = $('tabs');
+    const showTab = (id, focus) => {
+      document.querySelectorAll('.pane').forEach((pane) => { pane.hidden = pane.dataset.tab !== id; });
+      nav.querySelectorAll('button').forEach((b) => {
+        const on = b.dataset.tab === id;
+        b.setAttribute('aria-selected', String(on));
+        b.tabIndex = on ? 0 : -1;
+        if (on) { b.scrollIntoView({ block: 'nearest', inline: 'nearest' }); if (focus) b.focus(); }
+      });
+      store.set(TAB_STORE, id);
+    };
+    for (const id of TAB_ORDER) {
+      const pane = $(`pane-${id}`);
+      const b = Object.assign(document.createElement('button'), { type: 'button', id: `tab-${id}`, textContent: pane.dataset.name });
+      b.dataset.tab = id;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-controls', `pane-${id}`);
+      b.addEventListener('click', () => showTab(id));
+      nav.append(b);
+    }
+    nav.addEventListener('keydown', (e) => {   // arrow keys move between tabs
+      const i = TAB_ORDER.indexOf(store.get(TAB_STORE) || 'mood');
+      const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (!d) return;
+      e.preventDefault();
+      showTab(TAB_ORDER[(i + d + TAB_ORDER.length) % TAB_ORDER.length], true);
+    });
+    showTab(TAB_ORDER.includes(store.get(TAB_STORE)) ? store.get(TAB_STORE) : 'mood');
+    // Range sliders for random mode: two thumbs (low, high), the band between them, and a mark
+    // at the current value.
+    const addDual = (host, key, before) => {
+      const dual = document.createElement('div');
+      dual.className = 'dual';
+      dual.hidden = true;
+      dual.dataset.key = key;
+      dual.innerHTML = `<span class="band"></span><input type="range" min="0" max="1" step="0.01" aria-label="${LABELS[key] || key}: lowest random value">` +
+        `<input type="range" min="0" max="1" step="0.01" aria-label="${LABELS[key] || key}: highest random value"><span class="mark"></span>`;
+      const [lo, hi] = dual.querySelectorAll('input');
+      const changed = () => {
+        let a = Number(lo.value), b = Number(hi.value);
+        if (a > b) [a, b] = [b, a];
+        state.random.ranges[key] = INVERTED.has(key) ? [Number((1 - b).toFixed(3)), Number((1 - a).toFixed(3))] : [a, b];
+        storeRandom();
+        syncRange(key);
+      };
+      lo.addEventListener('input', changed);
+      hi.addEventListener('input', changed);
+      host.insertBefore(dual, before);
+    };
+    document.querySelectorAll('.row[data-key]').forEach((row) => {
+      const key = row.dataset.key;
+      if (KEY_SECTION[key]) addDual(row, key, row.querySelector('.ends'));
+    });
+    document.querySelectorAll('.fx[data-fx]').forEach((row) => addDual(row, `${row.dataset.fx}FxAmount`, row.querySelector('output')));
+    // Mood map in random mode: a drag draws the rectangle that random mood points stay in.
+    {
+      const map = $('mood-map');
+      let anchor = null;
+      const at = (e) => {
+        const r = map.getBoundingClientRect();
+        return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height))];
+      };
+      map.addEventListener('pointerdown', (e) => {
+        if (!randomOn('mood')) return;
+        e.stopImmediatePropagation();
+        anchor = at(e);
+        map.setPointerCapture(e.pointerId);
+      }, true);
+      map.addEventListener('pointermove', (e) => {
+        if (!randomOn('mood') || !anchor) return;
+        e.stopImmediatePropagation();
+        const [x, y] = at(e), r = (a, b) => [Number(Math.min(a, b).toFixed(3)), Number(Math.max(a, b).toFixed(3))];
+        state.random.ranges.light = r(anchor[0], x);
+        state.random.ranges.energy = r(anchor[1], y);
+        syncMoodMap();
+      }, true);
+      map.addEventListener('pointerup', () => { if (anchor) { anchor = null; storeRandom(); } }, true);
+    }
     $('hint-start').hidden = !!hints.map;
     // Reset one section to its defaults (the seed and the other sections stay).
     const SECTION_KEYS = {
-      mix: ['volume', 'motifLevel', 'padLevel', 'noiseLevel'],
-      motifs: ['motifDensity', 'motifNoteLength', 'motifArticulation', 'phraseSoftness', 'motifOctaveLow', 'motifOctaveHigh', 'motifReverb', 'motifGrit'],
-      pad: ['padLength', 'padDrift', 'padWidth', 'padOctaveLow', 'padOctaveHigh', 'padOverlap', 'padRevoice', 'padTransition'],
+      mood: ['light', 'energy'],
+      mix: ['volume', 'motifLevel', 'padLevel', 'noiseLevel', 'motifFx', 'motifFxAmount', 'padFx', 'padFxAmount', 'noiseFx', 'noiseFxAmount'],
+      motifs: ['motifDensity', 'motifNoteLength', 'motifArticulation', 'phraseSoftness', 'motifOctaveLow', 'motifOctaveHigh', 'motifReverb'],
+      pad: ['padLength', 'padDrift', 'padWidth', 'padOctaveLow', 'padOctaveHigh', 'padOverlap', 'padTransition'],
       noise: ['noiseSweep', 'noiseTone', 'noisePan', 'noiseWidth'],
     };
-    document.querySelectorAll('[data-reset]').forEach((b) => b.addEventListener('click', () => {
+    resetSection = (id) => {
       const defaults = parse('light=0.6').traits;
-      for (const key of SECTION_KEYS[b.dataset.reset]) state.settings[key] = defaults[key];
+      for (const key of SECTION_KEYS[id]) state.settings[key] = defaults[key];
       syncControls();
       setVolume(state.settings.volume);
-      if (b.dataset.reset === 'noise' && state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
+      if (id === 'noise' && state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
       soundChanged();
-    }));
+      recordStep(`Reset ${{ mood: 'Mood', mix: 'Mix', motifs: 'Motifs', pad: 'Sound bed', noise: 'Noise bed' }[id]}`);
+    };
     // Touch screens have no hover: a tap on a label shows what the setting does (a tap
     // anywhere else hides it).
+    const tip = $('tip');
+    let tipFor = null;
+    const hideTip = () => { tip.hidden = true; tipFor = null; };
+    const showTip = (el) => {
+      tipFor = el;
+      tip.textContent = el.dataset.info;
+      tip.hidden = false;
+      const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+      const left = Math.max(12, Math.min(r.left, innerWidth - t.width - 12));
+      const below = r.bottom + 6 + t.height <= innerHeight - 12;
+      tip.style.left = `${left}px`;
+      tip.style.top = `${below ? r.bottom + 6 : Math.max(12, r.top - 6 - t.height)}px`;
+    };
+    document.addEventListener('pointerover', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const el = e.target.closest && e.target.closest('[data-info]');
+      if (el && el !== tipFor) showTip(el); else if (!el && tipFor) hideTip();
+    });
     document.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
-      const label = e.target.closest && e.target.closest('[data-info]');
-      document.querySelectorAll('.show-info').forEach((el) => { if (el !== label) el.classList.remove('show-info'); });
-      if (label) label.classList.toggle('show-info');
+      const el = e.target.closest && e.target.closest('[data-info]');
+      if (el && el !== tipFor) showTip(el); else hideTip();
     });
+    document.addEventListener('focusin', (e) => {
+      const label = e.target.labels && e.target.labels[0];
+      const el = label && (label.matches('[data-info]') ? label : label.querySelector('[data-info]'));
+      if (el && e.target.matches(':focus-visible')) showTip(el);   // keyboard only; a tap's focus keeps its tooltip
+    });
+    $('panel').addEventListener('scroll', hideTip, { passive: true });
     $('reset-btn').addEventListener('click', () => {
       const keep = state.seed;
       state.settings = parse('').traits;
@@ -979,18 +1417,9 @@
       syncControls();
       setVolume(state.settings.volume);
       soundChanged();
+      recordStep('Reset to defaults');
     });
-    // Share: the system share sheet where there is one, else the link is copied.
-    $('share-btn').addEventListener('click', async () => {
-      const url = shareLink(), btn = $('share-btn');
-      if (navigator.share) {
-        try { await navigator.share({ title: 'in halation', url }); return; }
-        catch (e) { if (e.name === 'AbortError') return; }
-      }
-      try { await navigator.clipboard.writeText(url); btn.textContent = 'Link copied'; }
-      catch (e) { btn.textContent = 'Copy blocked'; }
-      setTimeout(() => { btn.textContent = 'Share'; }, 1600);
-    });
+    $('share-btn').addEventListener('click', () => shareUrl(shareLink(), $('share-btn')));
     $('settings-form').addEventListener('submit', (e) => e.preventDefault());
     $('viz-shapes').addEventListener('click', () => setViz('shapes'));
     $('viz-traces').addEventListener('click', () => setViz('traces'));
@@ -1081,7 +1510,6 @@
     box.append(custom);
     // Noise: Off, or a style (stored as `noise` on/off and `noiseStyle`: 0 Grain, 1 Flock)
     [0, 1, 2].forEach((particles) => $(`particles-${particles}`).addEventListener('click', () => setDisplay({ particles })));
-    $('cycle').addEventListener('change', (e) => setDisplay({ colorCycle: e.target.checked }));
     [0, 1, 2].forEach((theme) => $(`bg-${theme}`).addEventListener('click', () =>
       setDisplay(theme === 2 ? { theme, rainbow: false } : { theme })));
     // Custom theme: the first time, it starts from the current theme's colors.
@@ -1092,7 +1520,6 @@
     $('theme-glow').querySelector('input').addEventListener('input', (e) => setDisplay({ themeGlow: e.target.value }));
     $('theme-glow-same').addEventListener('click', () => setDisplay({ themeGlow: 'lines' }));
     $('theme-glow-rainbow').addEventListener('click', () => setDisplay({ themeGlow: 'rainbow' }));
-    $('cycle-speed').addEventListener('input', (e) => setDisplay({ colorCycleSeconds: cycleSecondsFor(Number(e.target.value)) }));
     $('glow').addEventListener('input', (e) => setDisplay({ glow: Number(e.target.value) }));
     $('burn').addEventListener('input', (e) => setDisplay({ burnIn: Number(e.target.value) }));
     syncDisplay();
@@ -1110,12 +1537,14 @@
         (change.colorCycle && !state.display.colorCycle)) cyclePhase = 0;
     Object.assign(state.display, change);
     store.set(DISPLAY_STORE, JSON.stringify(state.display));
+    noteChange();
     syncDisplay();
   }
 
   function syncDisplay() {
     const d = state.display;
     if (![0, 1, 2, 3].includes(d.theme)) d.theme = 0;
+    d.colorCycle = false;   // Auto cycle was removed (2026-11-23); old settings and links open without it
     if (d.theme === 2 && d.rainbow) d.rainbow = false;   // a Color background turns Rainbow off
     const preset = COLORS.find(([, hex]) => hex === d.color.toLowerCase());
     document.querySelectorAll('.swatch[data-color]').forEach((b) =>
@@ -1150,10 +1579,6 @@
     custom.style.background = preset ? 'none' : d.color;
     $('custom-color').value = d.color;
     $('color-out').textContent = d.rainbow ? 'Rainbow' : preset ? preset[0] : d.color;
-    $('cycle').checked = !!d.colorCycle;
-    $('cycle-row').hidden = !d.colorCycle;
-    $('cycle-speed').value = cycleSliderFor(d.colorCycleSeconds);
-    $('cycle-out').textContent = cycleText(d.colorCycleSeconds);
     $('glow').value = d.glow;
     $('glow-out').textContent = d.glow.toFixed(2);
     if (![0, 1, 2].includes(d.particles)) d.particles = 2;
@@ -1255,7 +1680,10 @@
   function stepColor(dt) {
     const d = state.display;
     if (d.colorCycle) cyclePhase = (cyclePhase + dt / Math.max(CYCLE_MIN, d.colorCycleSeconds)) % 1;
-    const c = d.colorCycle && !d.rainbow ? hslRgb(ink.baseHue + cyclePhase * 360) : ink.base;
+    // A new color eases in (τ 0.35 s), so a Regen with the same shape changes smoothly.
+    const k = 1 - Math.exp(-dt / 0.35);
+    ink.shown = ink.shown ? ink.shown.map((v, i) => v + (ink.base[i] - v) * k) : [...ink.base];
+    const c = ink.shown.map(Math.round);
     if (d.theme === 3 && phosphor) {   // Custom: light drawn white (or in rainbow hues); colored in the composite
       ink.rgb = '255,255,255';
       if (tintColor !== d.themeBackground) { tintColor = d.themeBackground; document.body.style.background = d.themeBackground; }
@@ -1370,24 +1798,74 @@
     const dot = $('map-dot');
     dot.style.left = `${s.light * 100}%`;
     dot.style.top = `${(1 - s.energy) * 100}%`;
+    const rect = $('map-range'), [l0, l1] = rangeOf('light'), [e0, e1] = rangeOf('energy');
+    rect.hidden = !randomOn('mood');
+    Object.assign(rect.style, { left: `${l0 * 100}%`, width: `${(l1 - l0) * 100}%`, top: `${(1 - e1) * 100}%`, height: `${(e1 - e0) * 100}%` });
     const k = scaleIndex(s.light);
     const calm = s.energy < 0.34 ? 'calm' : s.energy < 0.67 ? 'moving' : 'active';
     $('map-readout').textContent = `${SCALES[k]} · ${calm}, about ${Math.round(42 + 70 * s.energy)} bpm`;
+  }
+
+  // Octave range sliders: the top octave of each, and where a value (0..1) sits on the track.
+  const OCT_MAX = { motif: 7, pad: 6 };
+  const octPos = (x) => `calc(8px + ${x} * (100% - 16px))`;
+
+  // One range slider: shown in random mode (its section's dice on), with the stored range and
+  // a mark at the current value (Smoothness shown the other way round).
+  function syncRange(key) {
+    const dual = document.querySelector(`.dual[data-key="${key}"]`);
+    if (!dual) return;
+    const on = randomOn(KEY_SECTION[key]), row = dual.parentElement;
+    row.classList.toggle('ranged', on);
+    dual.hidden = !on;
+    if (!on) return;
+    const inv = INVERTED.has(key), [a, b] = rangeOf(key);
+    const lo = inv ? 1 - b : a, hi = inv ? 1 - a : b;
+    const [loIn, hiIn] = dual.querySelectorAll('input');
+    if (document.activeElement !== loIn && document.activeElement !== hiIn) { loIn.value = lo; hiIn.value = hi; }
+    const v = state.settings[key] ?? 0.5, shown = inv ? 1 - v : v;
+    // Thumb centres sit 8 px in from each end (a 16 px thumb).
+    const pos = (x) => `calc(8px + ${x} * (100% - 16px))`;
+    Object.assign(dual.querySelector('.band').style, { left: pos(Math.min(lo, hi)), width: `calc(${Math.abs(hi - lo)} * (100% - 16px))` });
+    dual.querySelector('.mark').style.left = pos(shown);
   }
 
   function syncControls() {
     const s = state.settings;
     syncMoodMap();
     Object.keys(LABELS).forEach((key) => {
-      $(key).value = s[key];
+      $(key).value = INVERTED.has(key) ? 1 - s[key] : s[key];
       $(`${key}-out`).textContent = fmt(key, s[key]);
     });
-    $('padOctaveLow-out').textContent = s.padOctaveLow;
-    $('padOctaveHigh-out').textContent = s.padOctaveHigh;
-    $('motifOctaveLow-out').textContent = s.motifOctaveLow;
-    $('motifOctaveHigh-out').textContent = s.motifOctaveHigh;
-    $('revoice').checked = s.padRevoice;
+    document.querySelectorAll('.row[data-oct]').forEach((row) => {
+      const p = row.dataset.oct, max = OCT_MAX[p], cur = [s[`${p}OctaveLow`], s[`${p}OctaveHigh`]];
+      const rnd = randomOn(row.dataset.sec), r = state.random.ranges[`${p}Octaves`];
+      const [a, b] = rnd ? (r ? [Math.min(...r), Math.max(...r)] : [1, max]) : cur;
+      $(`${p}Octave-out`).textContent = rnd ? `random ${a} to ${b}` : `${a} to ${b}`;
+      const dual = row.querySelector('.dual');
+      if (!dual) return;
+      const [lo, hi] = dual.querySelectorAll('input');
+      lo.value = a; hi.value = b;
+      const f = (v) => (v - 1) / (max - 1);
+      Object.assign(dual.querySelector('.band').style, { left: octPos(f(a)), width: `calc(${f(b) - f(a)} * (100% - 16px))` });
+      dual.querySelectorAll('.mark').forEach((m, i) => { m.hidden = !rnd; m.style.left = octPos(f(cur[i])); });
+    });
     [0, 1].forEach((mode) => $(`transition-${mode}`).setAttribute('aria-checked', String((s.padTransition || 0) === mode)));
+    // Random mode: ranges instead of sliders, and the other randomized controls locked.
+    document.querySelectorAll('.dual[data-key]').forEach((d) => syncRange(d.dataset.key));
+    document.querySelectorAll('[data-rnd]').forEach((el) => el.classList.toggle('locked', randomOn(el.dataset.rnd)));
+    document.querySelectorAll('.fx-chip').forEach((chip) => {
+      const v = s[`${chip.dataset.fx}Fx`] || 0, sel = chip.querySelector('select');
+      sel.value = String(v);
+      sel.disabled = randomOn('mixFx');
+      chip.classList.toggle('on', v !== 0);
+    });
+    document.querySelectorAll('.fx[data-fx]').forEach((row) => {
+      const layer = row.dataset.fx, on = s[`${layer}Fx`] || 0, amount = `${layer}FxAmount`;
+      $(amount).hidden = $(`${amount}-out`).hidden = !on && !randomOn('mixFx');
+      $(amount).value = s[amount] ?? 0.5;
+      $(`${amount}-out`).textContent = (s[amount] ?? 0.5).toFixed(2);
+    });
     [0, 1, 2, 3].forEach((mode) => $(`sweep-${mode}`).setAttribute('aria-checked', String((s.noiseSweep || 0) === mode)));
     syncSweepControls();
   }
@@ -1748,8 +2226,7 @@
   }
 
   // Shapes: a ring per node, its edge shaped by the waveform.
-  function drawShapes(list, dt) {
-    begin(burnRate(26, 4), 0, dt);
+  function drawShapes(list) {
     const W = layer.width, H = layer.height, base = Math.min(W, H);
     for (const n of list) {
       const x = xFor(n.pan, W), y = yFor(n, H);
@@ -1806,8 +2283,7 @@
     lg.stroke();
   }
 
-  function drawTraces(list, dt, mode) {
-    begin(burnRate(18, 4), 0, dt);
+  function drawTraces(list, mode) {
     const both = mode === 'weave';
     for (const n of list) {
       if (mode !== 'columns') traceLine(n, false, both ? 0.8 : 1);
@@ -2159,7 +2635,7 @@
     if (!canvas.width || !canvas.height) {
       // Hidden or zero-size viewport (background tab, thumbnail): nothing to draw yet,
       // and drawImage would throw and stop this loop for good.
-    } else if (state.settings && state.viz === 'none') {
+    } else if (state.settings && state.viz === 'none' && !vizFade) {
       animateSweepControls(currentVisual());
       if (!blank) {                                            // nothing to draw: clear once
         g.setTransform(1, 0, 0, 1, 0, 0);
@@ -2175,8 +2651,21 @@
       const list = nodes(v);
       if (rainbowOn()) assignHues(list, now);
       placeNodes(list, dt);
-      if (['traces', 'columns', 'weave'].includes(state.viz)) drawTraces(list, dt, state.viz);
-      else drawShapes(list, dt);
+      const traced = (m) => ['traces', 'columns', 'weave'].includes(m);
+      begin(traced(state.viz) ? burnRate(18, 4) : burnRate(26, 4), 0, dt);
+      const draw = (m, alpha) => {
+        lg.globalAlpha = alpha;
+        if (traced(m)) drawTraces(list, m);
+        else if (m !== 'none') drawShapes(list);
+      };
+      if (vizFade) {   // the old shape out, the new one in (smoothstep)
+        vizFade.t += dt / VIZ_FADE;
+        const p = Math.min(1, vizFade.t), e = p * p * (3 - 2 * p);
+        draw(vizFade.from, 1 - e);
+        draw(state.viz, e);
+        if (p >= 1) vizFade = null;
+      } else draw(state.viz, 1);
+      lg.globalAlpha = 1;
       // Noise: Grain (specks) or Flock (birds on the noise bed's wind, into the lines).
       const style = state.display.particles - 1;   // -1 off, 0 Grain, 1 Flock
       if (style === 0 && v && v.noise > 0.001) drawNoise(lg, v.noise, dt, v.sweep);
@@ -2194,6 +2683,25 @@
     try { return JSON.parse(store.get(SAVED_STORE) || '[]'); } catch (e) { return []; }
   }
 
+  // Saved: the × to delete shows only while editing (Edit → Done).
+  let savedEditing = false;
+  function syncSavedEdit() {
+    $('saved-edit').textContent = savedEditing ? 'Done' : 'Edit';
+    $('saved-edit').setAttribute('aria-pressed', String(savedEditing));
+    renderSaved();
+  }
+  // A dot in a link's main light color: the Custom theme's lines, else Rainbow or the color.
+  function swatchFor(fragment) {
+    const p = {};
+    for (const pair of String(fragment || '').split('&')) { const [k, v] = pair.split('='); if (!(k in p)) p[k] = v; }
+    const lines = p.theme === '3' ? p.themeLines : (p.rainbow === '1' ? 'rainbow' : p.color);
+    const dot = Object.assign(document.createElement('span'), { className: 'swatch' });
+    dot.setAttribute('aria-hidden', 'true');
+    dot.style.background = lines === 'rainbow' ? 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)'
+      : /^[0-9a-f]{6}$/i.test(lines || '') ? `#${lines}` : 'var(--ink)';
+    return dot;
+  }
+
   function renderSaved() {
     const list = savedList();
     const ul = $('saved-list');
@@ -2208,15 +2716,29 @@
       what.append(when);
       const load = Object.assign(document.createElement('button'), { type: 'button', className: 'btn small', textContent: 'Load' });
       load.addEventListener('click', () => loadSaved(item));
-      const del = Object.assign(document.createElement('button'), { type: 'button', className: 'btn small x', textContent: '×' });
-      del.setAttribute('aria-label', `Delete ${item.label}`);
-      del.addEventListener('click', () => {
+      const share = Object.assign(document.createElement('button'), { type: 'button', className: 'btn small', textContent: 'Share' });
+      share.addEventListener('click', () => shareUrl(savedLink(item), share));
+      // Edit mode: only move (up, down) and delete, so a tap there never loads or shares.
+      const change = (fn) => {
         const next = savedList();
-        next.splice(i, 1);
+        fn(next);
         store.set(SAVED_STORE, JSON.stringify(next));
         renderSaved();
-      });
-      li.append(what, load, del);
+      };
+      const small = (text, label, fn, off) => {
+        const b = Object.assign(document.createElement('button'), { type: 'button', className: 'btn small x', textContent: text, disabled: !!off });
+        b.setAttribute('aria-label', label);
+        b.addEventListener('click', fn);
+        return b;
+      };
+      if (savedEditing) {
+        li.append(swatchFor(savedLink(item).split('#')[1]), what,
+          small('↑', `Move ${item.label} up`, () => change((n) => n.splice(i - 1, 0, n.splice(i, 1)[0])), i === 0),
+          small('↓', `Move ${item.label} down`, () => change((n) => n.splice(i + 1, 0, n.splice(i, 1)[0])), i === list.length - 1),
+          small('×', `Delete ${item.label}`, () => change((n) => n.splice(i, 1))));
+      } else {
+        li.append(swatchFor(savedLink(item).split('#')[1]), what, load, share);
+      }
       return li;
     }));
   }
@@ -2228,6 +2750,7 @@
       at: Date.now(),
       label: typeof name === 'string' ? `${name} (${scene})` : scene,
       query: query(),
+      link: shareLink().split('#')[1],
       view: VIEWS.indexOf(state.viz),
       display: { ...state.display },
       auto: state.autoMinutes,
@@ -2238,7 +2761,32 @@
     renderSaved();
   }
 
+  // A saved item's share link: kept with it (items saved from Recent, or since links), else
+  // made from its stored settings.
+  const savedLink = (item) => (item.link ? `${SHARE_BASE}#${item.link}`
+    : linkFor(item.query, Number.isInteger(item.view) ? item.view : 0, displayFrom(item.display || {})));
+
+  // Recent → Saved: a history step becomes a saved item (named by its scene: key · bpm).
+  function saveStep(step) {
+    let label = step.label;
+    try {
+      const parsed = parse(step.link), sc = state.local && state.local.preview(step.link, parsed.seed);
+      if (sc && sc.key) label = `${sc.key} · ${Math.round(sc.tempo)} bpm`;
+    } catch (e) { /* keep the step's label */ }
+    const item = { at: Date.now(), label, link: step.link, query: step.link, view: VIEWS.indexOf(state.viz), display: { ...state.display }, auto: state.autoMinutes };
+    const list = [item, ...savedList()].slice(0, 30);
+    store.set(SAVED_STORE, JSON.stringify(list));
+    renderSaved();
+    status(`Saved: ${label}.`);
+    setTimeout(() => { if ($('status').textContent === `Saved: ${label}.`) status(''); }, 2000);
+  }
+
   function loadSaved(item) {
+    if (item.link) {   // the whole state, as a link
+      applyFragment(item.link);
+      recordStep(`Load ${item.label}`);
+      return;
+    }
     const parsed = parse(item.query);
     state.settings = parsed.traits;
     state.seed = parsed.seed;
@@ -2252,6 +2800,7 @@
     save();
     preview();
     if (state.playing) play();
+    recordStep(`Load ${item.label}`);
   }
 
   // ---- play by touch -------------------------------------------------------------------
@@ -2331,9 +2880,11 @@
   const SHARE_VERSION = 1;
   const hex6 = (c) => String(c || '').replace('#', '').toLowerCase();
 
-  function shareLink() {
-    const d = state.display, n = (v) => Number(Number(v).toFixed(3));
-    let look = `&shape=${VIEWS.indexOf(state.viz)}&particles=${d.particles}&theme=${d.theme}&color=${hex6(d.color)}` +
+  function shareLink() { return linkFor(query(), VIEWS.indexOf(state.viz), state.display); }
+  // The link for any sound query (as query() writes it), shape id and display settings.
+  function linkFor(soundQuery, shape, d) {
+    const n = (v) => Number(Number(v).toFixed(3));
+    let look = `&shape=${shape}&particles=${d.particles}&theme=${d.theme}&color=${hex6(d.color)}` +
       `&rainbow=${d.rainbow ? 1 : 0}&colorCycle=${d.colorCycle ? 1 : 0}&colorCycleSeconds=${Math.round(d.colorCycleSeconds)}` +
       `&glow=${n(d.glow)}&burnIn=${n(d.burnIn)}`;
     if (d.theme === 3) {
@@ -2341,7 +2892,22 @@
       look += `&themeBackground=${hex6(d.themeBackground || '#000000')}&themeLines=${keep(d.themeLines, ['rainbow'])}` +
         `&themeGlow=${keep(d.themeGlow, ['rainbow', 'lines'])}`;
     }
-    return `${SHARE_BASE}#v=${SHARE_VERSION}&${query()}${look}`;
+    return `${SHARE_BASE}#v=${SHARE_VERSION}&${soundQuery}${look}`;
+  }
+
+  // Share: the system share sheet where there is one, else the link is copied (the button
+  // says so for a moment).
+  async function shareUrl(url, btn) {
+    if (navigator.share) {
+      try { await navigator.share({ title: 'in halation', url }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    const icon = !btn.textContent.trim(), text = btn.textContent;
+    let said;
+    try { await navigator.clipboard.writeText(url); said = 'Link copied'; } catch (e) { said = 'Copy blocked'; }
+    if (icon) { status(`${said}.`); setTimeout(() => { if ($('status').textContent === `${said}.`) status(''); }, 2000); return; }
+    btn.textContent = said;
+    setTimeout(() => { btn.textContent = text; }, 1600);
   }
 
   // The link's settings, or null when the page was opened without one.
@@ -2353,9 +2919,20 @@
   // Opens a shared link: the current settings go to Saved first ("Before shared link"),
   // then the link's sound and look apply. Playback does not start.
   function openShared(fragment) {
-    const p = new URLSearchParams(fragment);
-    const version = Number(p.get('v')) || SHARE_VERSION;
+    const version = Number(new URLSearchParams(fragment).get('v')) || SHARE_VERSION;
     saveCurrent('Before shared link');
+    applyFragment(fragment);
+    setPanel(true);
+    status(version > SHARE_VERSION
+      ? 'This link is from a newer version of in halation; some settings may not apply.'
+      : 'Opened a shared link. Your earlier settings are in Saved.');
+    window.history.replaceState(null, '', location.pathname + location.search);   // a reload keeps your later changes
+    recordStep('Shared link');
+  }
+
+  // Applies a link's settings (sound and look): shared links and history steps.
+  function applyFragment(fragment) {
+    const p = new URLSearchParams(fragment);
     const parsed = parse(fragment);   // the sound keys (old names too); look keys are ignored there
     state.settings = parsed.traits;
     state.seed = parsed.seed;
@@ -2390,11 +2967,6 @@
     save();
     preview();
     if (state.playing) play();
-    setPanel(true);
-    status(version > SHARE_VERSION
-      ? 'This link is from a newer version of in halation; some settings may not apply.'
-      : 'Opened a shared link. Your earlier settings are in Saved.');
-    window.history.replaceState(null, '', location.pathname + location.search);   // a reload keeps your later changes
   }
 
   // ---- start ----------------------------------------------------------------------------
@@ -2429,20 +3001,20 @@
     $('regen-btn').addEventListener('click', regen);
     $('save-btn').addEventListener('click', () => saveCurrent());
     renderSaved();
+    // History: the state at start is a step (unless it equals the last one).
+    if (steps.index >= 0) storeSteps();
+    recordStep(steps.list.length ? 'Opened' : 'Start');
     if (sharedFragment()) openShared(sharedFragment());
     addEventListener('hashchange', () => { if (sharedFragment()) openShared(sharedFragment()); });
     $('auto-regen').value = String(state.autoMinutes);
     if ($('auto-regen').value !== String(state.autoMinutes)) { state.autoMinutes = 0; $('auto-regen').value = '0'; }
+    const autoChip = () => $('auto-regen').closest('.chip').classList.toggle('on', state.autoMinutes > 0);
+    autoChip();
     $('auto-regen').addEventListener('change', (e) => {
       state.autoMinutes = Number(e.target.value);
+      autoChip();
       store.set(AUTO_STORE, String(state.autoMinutes));
       armAutoRegen();
-    });
-    $('randomize').checked = state.randomize;
-    $('randomize').addEventListener('change', (e) => {
-      state.randomize = e.target.checked;
-      store.set(RANDOM_STORE, state.randomize ? '1' : '0');
-      if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'randomize', value: state.randomize });
     });
     setInterval(showAutoCountdown, 500);
     $('collapse').addEventListener('click', () => setPanel(false));

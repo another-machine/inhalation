@@ -66,7 +66,7 @@
  *   padWidth       (spread, poles) 0.35 0..1  how far voicings reach to the range edges
  *   motifDensity   (phrases, touch) 0.18 0..1 melodic phrase probability, length, level
  *   phraseSoftness (attack)  0.72    0..1     phrase attack, glide and release
- *   padRevoice     (revoice, shift) true  only '0' means false; new voicing each cycle
+ *   padRevoice     always true (Vary chords is no longer a setting): a new voicing each cycle
  *   exposure / contrast / visual     visual settings; no sound effect
  *
  * MOOD VALUES (= display names; old values accepted)
@@ -1272,7 +1272,7 @@ class NoiseEngine {
           rv = t.motifReverb ?? 0.3;
         if (rv > 0) {
           let sr = this.context.sampleRate,
-            seconds = 1.6 + 2.8 * rv,
+            seconds = 2.2 + 7.8 * rv,
             len = Math.floor(sr * (seconds * 0.7 + 0.022)),
             ir = this.context.createBuffer(2, len, sr),
             conv = this.context.createConvolver(),
@@ -1303,15 +1303,15 @@ class NoiseEngine {
             { label: `glass bell`, wave: `sine`, filter: `highpass`, cutoff: 300, overtone: 2.76, overtoneLevel: 0.45, detune: 2, decay: 0.5, tail: 3 },
             { label: `deep bell`, wave: `sine`, filter: `lowpass`, cutoff: 3200, overtone: 2.4, overtoneLevel: 0.35, detune: 1, decay: 0.8, tail: 5 },
             { label: `tubular chime`, wave: `triangle`, filter: `highpass`, cutoff: 400, overtone: 5.4, overtoneLevel: 0.25, detune: 2, decay: 0.4, tail: 2.2 },
-            { label: `wind chime`, wave: `sine`, filter: `highpass`, cutoff: 250, overtone: 3.9, overtoneLevel: 0.4, detune: 6, decay: 0.15, tail: 1.6 },
-            { label: `reed`, wave: `sawtooth`, filter: `lowpass`, cutoff: 1500, overtone: 2, overtoneLevel: 0.08, detune: 4, breath: 0.15 },
-            { label: `clarinet`, wave: `square`, filter: `lowpass`, cutoff: 1800, overtone: 3, overtoneLevel: 0.1, detune: 2, breath: 0.1 },
-            { label: `breath flute`, wave: `triangle`, filter: `lowpass`, cutoff: 2400, overtone: 2, overtoneLevel: 0.18, detune: 3, breath: 0.22 },
-            { label: `ocarina`, wave: `sine`, filter: `lowpass`, cutoff: 2000, overtone: 2, overtoneLevel: 0.06, detune: 1, breath: 0.15 },
+            // Mallets and wood (as engine.cpp; the vibraphone's tremolo is core only).
+            { label: `marimba`, wave: `sine`, filter: `lowpass`, cutoff: 2600, overtone: 4, overtoneLevel: 0.3, detune: 1, decay: 0.22, tail: 0.7 },
+            { label: `singing bowl`, wave: `sine`, filter: `lowpass`, cutoff: 2400, overtone: 2.71, overtoneLevel: 0.3, detune: 1, decay: 1.2, tail: 6 },
+            { label: `soft vibraphone`, wave: `sine`, filter: `lowpass`, cutoff: 2200, overtone: 4, overtoneLevel: 0.1, detune: 1, decay: 0.8, tail: 4.5 },
+            { label: `vibraphone`, wave: `sine`, filter: `lowpass`, cutoff: 4200, overtone: 4, overtoneLevel: 0.16, detune: 1, decay: 0.6, tail: 3.6 },
           ],
           // Bit crusher (bits only; the rate part needs the native core): a staircase curve.
           crushCurve = (() => {
-            let bits = t.motifGrit ?? 0;
+            let bits = t.motifFx === 1 ? (t.motifFxAmount ?? 0) : 0;   // motif crush (drive: core only)
             if (!(bits > 0)) return null;
             let steps = 2 ** (11 - 6 * bits), n = 8192, curve = new Float32Array(n);   // 12 → 6 bits
             for (let k = 0; k < n; k++) {
@@ -1333,13 +1333,22 @@ class NoiseEngine {
           if (f > 0 && r() > 0.12 + t.motifDensity * 0.88) continue;
           let p = n + 0.8 + f * a + r() * a * 0.38,
             m = 4 + Math.floor(t.motifDensity * 10),
-            h = r() < 0.14 ? 1 : 1 + Math.floor(r() ** 1.25 * m),
+            // A phrase (as engine.cpp): a cell of 2 … 4 notes, repeated as a sequence, a held last note.
+            h = r() < 0.05 ? 1 : Math.min(16, 3 + Math.floor(r() ** 1.2 * m)),
             g = c[Math.floor(r() * c.length)],
             breath = g.breath || 0,
             bn = null,
             bp = null,
             _ = r() > 0.5 ? 1 : -1,
             v = Math.floor(r() * motifNotes.length),
+            cellLen = 2 + Math.floor(r() * 3),
+            cell = Array.from({ length: cellLen }, () => {
+              r() < 0.28 && (_ *= -1);
+              return { step: u[Math.floor(r() * u.length)] * _, dur: d[Math.floor(r() * d.length)], gap: 0.94 + r() * 0.75 };
+            }),
+            shift = (r() < 0.5 ? -1 : 1) * (1 + Math.floor(r() * 2)),
+            first = v,
+            clampNote = (k) => Math.max(0, Math.min(motifNotes.length - 1, k)),
             y = this.context.createOscillator(),
             b = this.context.createOscillator(),
             ee = this.context.createGain(),
@@ -1389,8 +1398,10 @@ class NoiseEngine {
             rings = !!(g.decay && g.tail),
             lastStrike = p;
           for (let n = 0; n < h; n++) {
+            let k = n % cellLen;
+            n > 0 && k === 0 && (v = clampNote(first + Math.floor(n / cellLen) * shift));
             let a = motifNotes[v],
-              o = d[Math.floor(r() * d.length)] * (0.45 + 1.9 * (t.motifNoteLength ?? 0.65)),
+              o = cell[k].dur * (0.6 + 2.6 * (t.motifNoteLength ?? 0.65)) * (n === h - 1 && h > 1 ? 2 : 1),
               s = g.wave === `sawtooth` || g.wave === `square` ? 0.72 : 1,
               c = (0.035 + t.motifDensity * 0.065) * (2 * (t.motifLevel ?? 0.5)) * s * ce(a);
             if (
@@ -1434,9 +1445,9 @@ class NoiseEngine {
             // Articulation: detached notes above legato (staccato at 1).
             let art = t.motifArticulation ?? 1 - t.phraseSoftness;
             art > 0.3 && !rings && S.gain.setTargetAtTime(1e-4, C + o * (1 - 0.65 * art), 0.015 + 0.06 * (1 - art));
-            ((C += o * (0.94 + r() * 0.75)), r() < 0.28 && (_ *= -1));
-            let f = u[Math.floor(r() * u.length)] * _;
-            v = (v + f + motifNotes.length * 2) % motifNotes.length;
+            C += o * cell[k].gap;
+            let f = n >= cellLen && r() < 0.25 ? u[Math.floor(r() * u.length)] * _ : cell[k].step;
+            v = clampNote(v + f);
           }
           let w = 0.3 + i * 1.5,
             oe = C + w;
@@ -1591,7 +1602,9 @@ const xe = [
     motifOctaveLow: 1,
     motifOctaveHigh: 7,
     // Motif bit crusher, 0 = off: bits (12 → 6 bits) and rate (sample-and-hold; core only).
-    motifGrit: 0,   // bit crusher (was two settings, bits and rate)
+    // Layer FX: type 0 none, 1 crush, 2 drive, and an amount (motif crush was Grit). The
+    // fallback plays only motif crush (bits); the rest needs the native core.
+    motifFx: 0, motifFxAmount: 0.5, padFx: 0, padFxAmount: 0.5, noiseFx: 0, noiseFxAmount: 0.5,
   },
   // Old URL keys (renamed sections, the first app's keys) and mood values, still accepted
   // so shared links keep working; the new name wins. Names are only ever added here.
@@ -1655,7 +1668,7 @@ function Se(search = "") {
       phraseSoftness: t(`phraseSoftness`, k.phraseSoftness),
       exposure: t(`exposure`, k.exposure, -1, 1),
       contrast: t(`contrast`, k.contrast, -1, 1),
-      padRevoice: get(`padRevoice`) !== `0`,
+      padRevoice: !0,   // Vary chords is always on
       noiseSweep: Math.round(t(`noiseSweep`, 0, 0, 3)),   // 0 off, 1 slow, 2 fast, 3 medium; native core only
       visualize: e.get(`visual`) !== `0`,
       useMap: get(`light`) !== null || get(`energy`) !== null,
@@ -1673,9 +1686,21 @@ function Se(search = "") {
       motifOctaveHigh: Math.round(t(`motifOctaveHigh`, k.motifOctaveHigh, 1, 7)),
     };
   r.motifOctaveHigh = Math.max(r.motifOctaveLow, r.motifOctaveHigh);
-  // Grit was two settings, bits and rate: an old link opens at the larger of the two.
-  r.motifGrit = get(`motifGrit`) !== null ? t(`motifGrit`, k.motifGrit)
-    : Math.max(t(`motifCrushBits`, 0), t(`motifCrushRate`, 0));
+  // Layer FX: motif crush was Grit (motifGrit), and before that two settings, bits and
+  // rate: an old link with any of them above 0 opens as crush at that amount.
+  const fxId = (key) => Math.round(t(key, 0, 0, 2));
+  if (get(`motifFx`) !== null) {
+    r.motifFx = fxId(`motifFx`);
+    r.motifFxAmount = t(`motifFxAmount`, k.motifFxAmount);
+  } else {
+    const old = get(`motifGrit`) !== null ? t(`motifGrit`, 0) : Math.max(t(`motifCrushBits`, 0), t(`motifCrushRate`, 0));
+    r.motifFx = old > 0 ? 1 : 0;
+    r.motifFxAmount = old > 0 ? old : t(`motifFxAmount`, k.motifFxAmount);
+  }
+  r.padFx = fxId(`padFx`);
+  r.padFxAmount = t(`padFxAmount`, k.padFxAmount);
+  r.noiseFx = fxId(`noiseFx`);
+  r.noiseFxAmount = t(`noiseFxAmount`, k.noiseFxAmount);
   // Length was the inverse of speed: an old speed or motion (no padLength) opens as
   // 1 - speed. A new link without padLength gets the default.
   r.padLength = get(`padLength`) !== null ? t(`padLength`, k.padLength)
