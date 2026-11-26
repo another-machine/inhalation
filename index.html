@@ -445,6 +445,8 @@
           <div class="row-top"><span data-info="The color of the light. More colors and themes are in View.">Color</span></div>
           <div class="swatches" id="feel-colors" role="radiogroup" aria-label="Color"></div>
         </div>
+        <label class="switch"><span data-info="Shows the tabs with every setting: Mood, Mix, Motifs, Sound bed, Noise bed and View. There you can also set what Regen may pick.">Advanced</span>
+          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced: show every setting"></label>
       </div>
     </section>
     <section class="pane" id="pane-mood" data-tab="mood" data-name="Mood" role="tabpanel" aria-labelledby="tab-mood" hidden>
@@ -616,6 +618,8 @@
         </div>
         <label class="switch" for="touch-play"><span data-info="Press the screen for a note where its pitch is drawn. Hold and drag to glide.">Play by touch</span>
           <input type="checkbox" id="touch-play" role="switch"></label>
+        <label class="switch"><span data-info="Shows the tabs with every setting: Mood, Mix, Motifs, Sound bed, Noise bed and View. Off: only Feel, Library and Settings.">Advanced</span>
+          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced: show every setting"></label>
         <div class="line"><span class="fine"><span id="seed-label">Seed</span> · <span id="engine-label"></span></span>
           <button type="button" class="btn small" id="reset-btn">Reset to defaults</button></div>
       </div>
@@ -728,6 +732,8 @@
   const SPEC_STORE = 'in-halation.allowed';     // the allowed values: { key: value | {range} | {pick} } (see docs/config-design.md)
   const EFFECTS_STORE = 'in-halation.effects';  // '1' = the Effects rows show
   const VIEW_REGEN_STORE = 'in-halation.viewRegen';   // '1' = Regen also picks a new look
+  const ADVANCED_STORE = 'in-halation.advanced';      // '1' = the detail tabs show (Feel, Library, Settings always)
+  const ADVANCED_TABS = ['mood', 'mix', 'motifs', 'pad', 'noise', 'view'];
   // Mood map: light (x) picks one of six scales, dark to bright; energy (y) sets tempo
   // (about 42 + 70 × energy bpm), how much the chords move, and timbre roughness.
   const SCALES = ['Phrygian', 'Aeolian', 'Dorian', 'Mixolydian', 'Ionian', 'Lydian'];
@@ -1869,14 +1875,26 @@
       b.addEventListener('click', () => showTab(id));
       nav.append(b);
     }
+    // Advanced off: only Feel, Library and Settings show (the detail tabs keep their settings).
+    let advanced = store.get(ADVANCED_STORE) === '1';
+    const visibleTabs = () => TAB_ORDER.filter((id) => advanced || !ADVANCED_TABS.includes(id));
+    const setAdvanced = (on) => {
+      advanced = on;
+      store.set(ADVANCED_STORE, on ? '1' : '0');
+      document.querySelectorAll('.advanced-switch').forEach((input) => { input.checked = on; });
+      for (const id of ADVANCED_TABS) $(`tab-${id}`).hidden = !on;
+      if (!visibleTabs().includes(store.get(TAB_STORE))) showTab('feel');
+    };
+    document.querySelectorAll('.advanced-switch').forEach((input) => input.addEventListener('change', () => setAdvanced(input.checked)));
     nav.addEventListener('keydown', (e) => {   // arrow keys move between tabs
-      const i = TAB_ORDER.indexOf(store.get(TAB_STORE) || 'feel');
+      const tabs = visibleTabs(), i = tabs.indexOf(store.get(TAB_STORE) || 'feel');
       const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
       if (!d) return;
       e.preventDefault();
-      showTab(TAB_ORDER[(i + d + TAB_ORDER.length) % TAB_ORDER.length], true);
+      showTab(tabs[(i + d + tabs.length) % tabs.length], true);
     });
     showTab(TAB_ORDER.includes(store.get(TAB_STORE)) ? store.get(TAB_STORE) : 'feel');
+    setAdvanced(advanced);
     // Mood map with Area on: a drag draws the rectangle that Regen's mood points stay in.
     {
       const map = $('mood-map');
