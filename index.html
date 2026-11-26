@@ -104,6 +104,8 @@
           background: linear-gradient(to bottom, var(--panel) 55%, transparent); }
   .grip::before { content: ""; width: 40px; height: 4px; border-radius: 2px; background: var(--line); }
   @media (min-width: 900px) { .grip { display: none; } }
+  /* On phones the grabber closes the panel, so the head has no close chevron (more room for the title). */
+  @media (max-width: 899.98px) { #collapse { display: none; } }
 
   .head { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
   .head-actions { display: flex; gap: 6px; }
@@ -257,7 +259,8 @@
   .row-top { display: flex; justify-content: space-between; align-items: baseline; }
   /* Mix: one line per level (name, slider, Range). */
   .mix { gap: 2px; }
-  .mix > .row + .row, .mix .fx + .row { margin-top: 14px; }   /* each layer (level + its effect) is one group */
+  .group.mix { gap: 36px; }   /* each layer (its level and its effect) is one group, well apart from the next */
+  .mix .layer { display: grid; gap: 12px; }
   .mix .row { grid-template-columns: 84px 1fr 58px; align-items: center; gap: 10px; }
   .mix .row-top output { display: none; }   /* no numbers in the Mix: the slider shows the level */
   .mix .row-top, .mix .row-top .end { display: contents; }
@@ -265,8 +268,8 @@
   .mix .row input[type="range"] { order: 1; }
   .mix .row .range-btn { order: 2; justify-self: end; }
   .mix .row.swept .row-top label::after { content: none; }
-  /* A layer's effect (Effects on): the effects Regen may pick, then the amount (when one is on). */
-  .mix .fx { display: grid; gap: 8px; margin-top: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
+  /* A layer's effect: the effects Regen may pick, then the amount (when one is on). */
+  .mix .fx { display: grid; gap: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
   .mix .fx .row-top span { color: var(--dim); font-size: 12.5px; }
   .mix .fx .row-top label { color: var(--dim); font-size: 12.5px; }
   .row-top output { font: 13px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
@@ -445,8 +448,6 @@
           <div class="row-top"><span data-info="The color of the light. More colors and themes are in View.">Color</span></div>
           <div class="swatches" id="feel-colors" role="radiogroup" aria-label="Color"></div>
         </div>
-        <label class="switch"><span data-info="Every setting in its own tab instead of Controls: Mood, Mix, Motifs, Sound bed, Noise bed and View. There you can also set what Regen may pick. Turn it off in Settings.">Advanced controls</span>
-          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced controls: show every setting"></label>
       </div>
     </section>
     <section class="pane" id="pane-mood" data-tab="mood" data-name="Mood" role="tabpanel" aria-labelledby="tab-mood" hidden>
@@ -475,16 +476,12 @@
       <div class="pane-head"></div>
       <div class="group mix">
         <div class="row" data-key="volume"></div>
-        <div class="row" data-key="motifLevel"></div>
-        <div class="fx" data-fx="motif"><div class="picks-row" data-pick="motifFx"></div><div class="row" data-key="motifFxAmount"></div></div>
-        <div class="row" data-key="padLevel"></div>
-        <div class="fx" data-fx="pad"><div class="picks-row" data-pick="padFx"></div><div class="row" data-key="padFxAmount"></div></div>
-        <div class="row" data-key="noiseLevel"></div>
-        <div class="fx" data-fx="noise"><div class="picks-row" data-pick="noiseFx"></div><div class="row" data-key="noiseFxAmount"></div></div>
-      </div>
-      <div class="group">
-        <label class="switch"><span data-info="Effects on each layer: Crush makes it grainy and lo-fi, like an old sampler; Drive makes it warm and saturated. Off: no effects.">Effects</span>
-          <input type="checkbox" role="switch" id="fx-on"></label>
+        <div class="layer"><div class="row" data-key="motifLevel"></div>
+          <div class="fx" data-fx="motif"><div class="picks-row" data-pick="motifFx"></div><div class="row" data-key="motifFxAmount"></div></div></div>
+        <div class="layer"><div class="row" data-key="padLevel"></div>
+          <div class="fx" data-fx="pad"><div class="picks-row" data-pick="padFx"></div><div class="row" data-key="padFxAmount"></div></div></div>
+        <div class="layer"><div class="row" data-key="noiseLevel"></div>
+          <div class="fx" data-fx="noise"><div class="picks-row" data-pick="noiseFx"></div><div class="row" data-key="noiseFxAmount"></div></div></div>
       </div>
     </section>
     <section class="pane" id="pane-motifs" data-tab="motifs" data-name="Motifs" role="tabpanel" aria-labelledby="tab-motifs" hidden>
@@ -608,6 +605,8 @@
     <section class="pane" id="pane-settings" data-tab="settings" data-name="Settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
       <div class="pane-head"></div>
       <div class="group">
+        <label class="switch"><span data-info="On: every setting in its own tab (Mood, Mix, Motifs, Sound bed, Noise bed and View). Off: the Controls tab instead.">Advanced controls</span>
+          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced controls: show every setting"></label>
         <div class="auto">
           <span data-info="Light or dark controls. System follows the phone or computer setting. The visualization keeps its own Theme.">Appearance</span>
           <div class="seg bg" role="radiogroup" aria-label="Appearance">
@@ -618,8 +617,6 @@
         </div>
         <label class="switch" for="touch-play"><span data-info="Press the screen for a note where its pitch is drawn. Hold and drag to glide.">Play by touch</span>
           <input type="checkbox" id="touch-play" role="switch"></label>
-        <label class="switch"><span data-info="On: every setting in its own tab (Mood, Mix, Motifs, Sound bed, Noise bed and View). Off: the Controls tab instead.">Advanced controls</span>
-          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced controls: show every setting"></label>
         <div class="line"><span class="fine"><span id="seed-label">Seed</span> · <span id="engine-label"></span></span>
           <button type="button" class="btn small" id="reset-btn">Reset to defaults</button></div>
       </div>
@@ -730,7 +727,6 @@
     'noiseTone', 'noisePan', 'noiseWidth'];
   const FX_KEYS = ['motifFx', 'padFx', 'noiseFx'];
   const SPEC_STORE = 'in-halation.allowed';     // the allowed values: { key: value | {range} | {pick} } (see docs/config-design.md)
-  const EFFECTS_STORE = 'in-halation.effects';  // '1' = the Effects rows show
   const VIEW_REGEN_STORE = 'in-halation.viewRegen';   // '1' = Regen also picks a new look
   const ADVANCED_STORE = 'in-halation.advanced';      // '1' = the detail tabs show instead of Controls (id feel)
   const ADVANCED_TABS = ['mood', 'mix', 'motifs', 'pad', 'noise', 'view'];
@@ -798,7 +794,7 @@
     touchPlay: store.get(TOUCH_STORE) === '1', pointers: new Map(),
     autoMinutes: store.get(AUTO_STORE) === null ? 3 : snapAuto(Number(store.get(AUTO_STORE))),   // on by default: 3 min autoTimer: 0, autoAt: 0,
     // The allowed values (what Regen may pick); read in init, after the settings.
-    spec: null, effects: store.get(EFFECTS_STORE) === '1', viewRegen: store.get(VIEW_REGEN_STORE) === '1',
+    spec: null, viewRegen: store.get(VIEW_REGEN_STORE) === '1',
     pending: 0, suspendTimer: 0,
     viz: (() => {   // stored as a numeric id; older saved names are still read
       const v = store.get(VIZ_STORE);
@@ -1518,16 +1514,6 @@
     $(`${p}OctaveWeights-out`).textContent = `${used[0]} to ${used[used.length - 1]}`;
   }
 
-  // Effects (Mix): on = each layer's effect rows show; off (by hand) = no effects.
-  function setEffects(on, byHand) {
-    state.effects = on;
-    store.set(EFFECTS_STORE, on ? '1' : '0');
-    if (!on && byHand) {
-      for (const key of FX_KEYS) state.spec[key] = { pick: [0] };
-      storeSpec();
-      specChanged(FX_KEYS);
-    } else syncControls();
-  }
 
   // ---- Feel -------------------------------------------------------------------------
   // The plain view: pads with a word at each end of both axes. A pad only writes into the
@@ -1782,9 +1768,6 @@
     buildPadCells();
     document.querySelectorAll('.row[data-weights]').forEach(buildWeights);
     buildFeel();
-    // Effects (Mix): off = every layer without an effect, and the rows hidden.
-    $('fx-on').checked = state.effects;
-    $('fx-on').addEventListener('change', (e) => setEffects(e.target.checked, true));
     $('view-regen').checked = state.viewRegen;
     $('view-regen').addEventListener('change', (e) => { state.viewRegen = e.target.checked; store.set(VIEW_REGEN_STORE, state.viewRegen ? '1' : '0'); });
     $('map-area').addEventListener('change', (e) => {
@@ -1939,9 +1922,9 @@
     const SECTION_NAMES = { mood: 'Mood', mix: 'Mix', motifs: 'Motifs', pad: 'Sound bed', noise: 'Noise bed' };
     // Allow all: every range open fully, every pick list ticked, every sound allowed (Key,
     // Scale, Chord pattern and Tempo follow the map). Fix all: every key at its current value.
-    // The effects stay as they are while Effects is off; the octave weights stay.
+    // The octave weights stay.
     const allowSection = (id, all) => {
-      const s = state.settings, keys = SECTION_KEYS[id].filter((k) => state.effects || !(FX_KEYS.includes(k) || k.endsWith('FxAmount')));
+      const s = state.settings, keys = SECTION_KEYS[id];
       for (const key of keys) {
         if (key.endsWith('OctaveWeights')) continue;
         if (PICKS[key]?.auto || key === 'tempo') {
@@ -2450,12 +2433,10 @@
     syncMotifSounds();
     syncPadCells();
     document.querySelectorAll('.row[data-weights]').forEach(syncWeights);
-    // Effects: the rows show only with Effects on; the amount only when an effect may be on.
+    // Effects: the amount shows only when an effect may be on.
     document.querySelectorAll('.fx[data-fx]').forEach((row) => {
-      row.hidden = !state.effects;
       row.querySelector('.row[data-key]').hidden = !picksOf(`${row.dataset.fx}Fx`).some((v) => v !== 0);
     });
-    $('fx-on').checked = state.effects;
     $('map-area').checked = isRange('light') || isRange('energy');
     syncSweepControls();
     syncFeel();
@@ -3535,7 +3516,7 @@
     state.spec = specClean(allowed, state.settings);
     fitSettings(Object.keys(state.spec));
     store.set(SPEC_STORE, JSON.stringify(state.spec));
-    if (FX_KEYS.some((k) => picksOf(k).some((v) => v !== 0))) setEffects(true);
+    syncControls();
     sendAllowed();
     // Look keys: numbers are clamped to their range; an id that doesn't exist, or a missing
     // or unreadable key, gets the default.
@@ -3596,7 +3577,6 @@
     try { state.spec = specClean(JSON.parse(store.get(SPEC_STORE) || 'null'), state.settings); }
     catch (e) { state.spec = specFrom(state.settings); }
     fitSettings(Object.keys(state.spec));
-    if (FX_KEYS.some((k) => picksOf(k).some((v) => v !== 0))) state.effects = true;
     buildControls();
     syncControls();
     preview();
