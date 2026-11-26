@@ -173,14 +173,33 @@
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .lib-actions { display: flex; gap: 8px; }
   .btn.icon { width: 44px; padding: 0; justify-content: center; }
-  /* Section dice: on = Regen and Auto regen randomize the section (random mode). */
-  .pane-head .dice { margin-right: 4px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line);
-                  background: none; color: var(--dim); border-radius: 999px; height: 26px; padding: 0 8px; cursor: pointer;
-                  font: 500 10.5px var(--body); letter-spacing: 0.06em; }
-  .pane-head .dice svg { width: 14px; height: 14px; }
-  .pane-head .dice[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
-  /* Random mode: sliders become ranges (Regen picks the value); the other randomized
-     controls show the value but can't be set. */
+  /* Allowed values: every setting is one value or a range (a slider) or a pick list (chips).
+     Range: the row's Range button turns its slider into two thumbs; Regen picks inside. */
+  .row-top .end { display: flex; align-items: baseline; gap: 8px; }
+  .range-btn, .pick { border: 1px solid var(--line); background: none; color: var(--dim); border-radius: 999px;
+                      height: 24px; padding: 0 9px; font: 500 11.5px var(--body); cursor: pointer; white-space: nowrap; }
+  .range-btn[aria-pressed="true"], .pick[aria-pressed="true"], .pick[aria-checked="true"] { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
+  .range-btn:disabled { opacity: 0.4; cursor: default; }
+  .picks-row { display: grid; gap: 8px; }
+  .picks { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pick { height: 30px; padding: 0 11px; font-size: 12.5px; }
+  .pick.auto-pick { border-style: dashed; }
+  .pick.family { font-weight: 600; }
+  .picks .gap { flex-basis: 100%; height: 0; }
+  /* Chord sounds: families (rows) × registers (columns); a cell allows its sounds there. */
+  .cells { display: grid; grid-template-columns: 64px repeat(3, 1fr); gap: 6px; align-items: stretch; }
+  .cells .col { color: var(--dim); font-size: 12px; text-align: center; align-self: end; }
+  .cells .pick.family { height: auto; padding: 0 6px; }
+  .cell { border: 1px solid var(--line); background: none; color: var(--dim); border-radius: 10px; padding: 6px 6px; min-height: 48px;
+          font: 11.5px/1.3 var(--body); cursor: pointer; text-align: center; }
+  .cell[aria-pressed="true"] { background: var(--surface); color: var(--ink); border-color: var(--ink); }
+  .cell[aria-pressed="false"] { opacity: 0.55; text-decoration: line-through; }
+  /* Octave weights: a bar per octave; drag a bar up or down (at the bottom = never). */
+  .weights { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; height: 84px; touch-action: none; cursor: ns-resize; }
+  .weights .bar { position: relative; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .weights .bar span { position: absolute; left: 0; right: 0; bottom: 0; background: var(--accent); }
+  .weights .bar:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .weight-labels { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; color: var(--dim); font: 12px var(--mono); text-align: center; margin-top: -2px; }
   /* Drawn by hand (two native sliders on top of each other draw two full tracks): one thin
      track, the range band in the slider color, two round thumbs, a small mark at the value. */
   .dual { position: relative; height: 28px; }
@@ -199,10 +218,8 @@
   .dual .band { position: absolute; top: 12px; height: 4px; border-radius: 2px; background: var(--accent); pointer-events: none; }
   .dual .mark { position: absolute; top: 9px; width: 2px; height: 10px; margin-left: -1px; border-radius: 1px; background: var(--dim);
                 pointer-events: none; }
-  .row.ranged > input[type="range"], .fx.ranged > input[type="range"] { display: none; }
+  .row.ranged > input[type="range"] { display: none; }
   .mix .row .dual { order: 1; }
-  .mix .fx .dual { grid-column: 2 / 3; }
-  [data-rnd].locked { opacity: 0.45; pointer-events: none; }
   .map-range { position: absolute; border: 1px dashed var(--ink); background: var(--map-tint); pointer-events: none; }
   .recent-now { color: var(--dim); font: 12px var(--mono); padding: 0 6px; }
   /* Advanced: the three sound sections, inside one closed group. */
@@ -238,24 +255,20 @@
   .note { margin: 0; color: var(--dim); font-size: 13px; }
   .row { display: grid; gap: 6px; }
   .row-top { display: flex; justify-content: space-between; align-items: baseline; }
-  /* Mix: one line per level (name, slider, value). */
+  /* Mix: one line per level (name, slider, Range). */
   .mix { gap: 2px; }
-  .mix .row + .row, .mix .fx + .row { margin-top: 14px; }   /* each layer (level + FX amount) is one group */
-  .mix .row { grid-template-columns: 84px 1fr 92px; align-items: center; gap: 10px; }
+  .mix > .row + .row, .mix .fx + .row { margin-top: 14px; }   /* each layer (level + its effect) is one group */
+  .mix .row { grid-template-columns: 84px 1fr 58px; align-items: center; gap: 10px; }
   .mix .row-top output { display: none; }   /* no numbers in the Mix: the slider shows the level */
-  .mix .row > .chip { order: 3; justify-self: end; }
-  .mix .row-top { display: contents; }
+  .mix .row-top, .mix .row-top .end { display: contents; }
   .mix .row-top label { order: 0; font-size: 14px; white-space: nowrap; }
   .mix .row input[type="range"] { order: 1; }
-
+  .mix .row .range-btn { order: 2; justify-self: end; }
   .mix .row.swept .row-top label::after { content: none; }
-  /* FX under each layer's level: None / Crush / Drive, then how much. */
-  /* A layer's FX amount, under its level line (only when an FX is on, or in random mode). */
-  .mix .fx { display: grid; grid-template-columns: 84px 1fr 92px; align-items: center; gap: 10px; margin: 0; }
-  .mix .fx:not(:has(> input:not([hidden]), > .dual:not([hidden]))) { display: none; }
-  .mix .fx > span { color: var(--dim); font-size: 12.5px; padding-left: 10px; }
-  .mix .fx input[type="range"], .mix .fx .dual { grid-column: 2 / 3; }
-  .mix .fx output { font: 13px var(--mono); color: var(--dim); text-align: right; }
+  /* A layer's effect (Effects on): the effects Regen may pick, then the amount (when one is on). */
+  .mix .fx { display: grid; gap: 8px; margin-top: 8px; padding-left: 10px; border-left: 1px solid var(--line); }
+  .mix .fx .row-top span { color: var(--dim); font-size: 12.5px; }
+  .mix .fx .row-top label { color: var(--dim); font-size: 12.5px; }
   .row-top output { font: 13px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
   input[type="range"] { width: 100%; accent-color: var(--accent); height: 28px; margin: 0; }
   input[type="range"]:disabled { opacity: 0.55; cursor: default; }
@@ -277,9 +290,6 @@
                           background: var(--dim); transition: transform 0.15s, background 0.15s; }
   .switch input:checked { background: var(--accent); }
   .switch input:checked::before { transform: translateX(18px); background: var(--surface); }
-  /* Octaves: one range slider (lowest and highest octave), whole steps, a tick at each octave. */
-  .octaves .tick { position: absolute; top: 20px; width: 1px; height: 5px; margin-left: -0.5px; background: var(--dim);
-                   pointer-events: none; }
   /* Peek: while a View control is in use on a phone, the panel goes see-through and only
      that control's row stays, so the whole animation shows. */
   .panel { transition: transform 260ms ease, background-color 160ms, border-color 160ms; }
@@ -334,6 +344,23 @@
   .map-axis.bottom { bottom: 6px; left: 50%; transform: translateX(-50%); }
   .map-axis.left { left: 8px; top: 50%; transform: translateY(-50%); }
   .map-axis.right { right: 8px; top: 50%; transform: translateY(-50%); }
+  /* Feel: small pads (two to a row) that write into the allowed values; a point = one
+     value, Area on = a rectangle (a range on both axes). */
+  .pads { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px; }
+  .pad-box { display: grid; gap: 6px; min-width: 0; }
+  .pad-head { display: flex; justify-content: space-between; align-items: center; min-height: 24px; font-size: 14px; }
+  .map.pad { height: auto; aspect-ratio: 1; }
+  .map.pad .map-axis { font-size: 9.5px; letter-spacing: 0.05em; }
+  .map.pad .map-axis.left, .map.pad .map-axis.right { max-width: 30%; white-space: normal; line-height: 1.15; }
+  .map.pad .map-axis.right { text-align: right; }
+  .feel-levels { display: grid; gap: 10px; }
+  .feel-level { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 10px; font-size: 14px; }
+  .fam-chip .cov { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; margin-left: 7px; }
+  .fam-chip .cov i { width: 3px; border-radius: 1px; background: currentColor; opacity: 0.3; }
+  .fam-chip .cov i:nth-child(1) { height: 5px; }
+  .fam-chip .cov i:nth-child(2) { height: 8px; }
+  .fam-chip .cov i:nth-child(3) { height: 11px; }
+  .fam-chip .cov i.on { opacity: 1; }
   .map-dot { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%;
              background: var(--ink); box-shadow: 0 0 0 4px var(--dot-glow), 0 0 14px var(--dot-halo);
              pointer-events: none; }
@@ -397,6 +424,29 @@
 
   <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
   <form id="settings-form" autocomplete="off">
+    <section class="pane" id="pane-feel" data-tab="feel" data-name="Feel" role="tabpanel" aria-labelledby="tab-feel" hidden>
+      <div class="pane-head"></div>
+      <div class="group">
+        <div class="pads" id="feel-pads"></div>
+        <div class="feel-levels" id="feel-levels"></div>
+        <div class="picks-row">
+          <div class="row-top"><span data-info="The sound families the chords may use. The three small bars show the registers a family is allowed in (low, mid, high); set them in Sound bed → Sounds.">Chord sounds</span></div>
+          <div class="picks" id="feel-chords" role="group" aria-label="Chord sound families"></div>
+        </div>
+        <div class="picks-row">
+          <div class="row-top"><span data-info="The sound families the motifs may use. Pick single sounds in Motifs → Sounds.">Motif sounds</span></div>
+          <div class="picks" id="feel-melody" role="group" aria-label="Motif sound families"></div>
+        </div>
+        <div class="picks-row">
+          <div class="row-top"><span data-info="The shape the sound draws on the screen.">Picture</span></div>
+          <div class="picks" id="feel-shape" role="radiogroup" aria-label="Picture"></div>
+        </div>
+        <div class="picks-row">
+          <div class="row-top"><span data-info="The color of the light. More colors and themes are in View.">Color</span></div>
+          <div class="swatches" id="feel-colors" role="radiogroup" aria-label="Color"></div>
+        </div>
+      </div>
+    </section>
     <section class="pane" id="pane-mood" data-tab="mood" data-name="Mood" role="tabpanel" aria-labelledby="tab-mood" hidden>
       <div class="pane-head"></div>
       <div class="group">
@@ -411,6 +461,12 @@
           </div>
         </div>
         <p class="note" id="map-readout" aria-live="polite"></p>
+        <label class="switch"><span data-info="Off: the mood stays at the point. On: drag on the map to draw an area; Regen picks a point inside it.">Area</span>
+          <input type="checkbox" role="switch" id="map-area"></label>
+        <div class="picks-row" data-pick="key"></div>
+        <div class="picks-row" data-pick="scale"></div>
+        <div class="picks-row" data-pick="progression"></div>
+        <div class="row" data-key="tempo"></div>
       </div>
     </section>
     <section class="pane" id="pane-mix" data-tab="mix" data-name="Mix" role="tabpanel" aria-labelledby="tab-mix" hidden>
@@ -418,11 +474,15 @@
       <div class="group mix">
         <div class="row" data-key="volume"></div>
         <div class="row" data-key="motifLevel"></div>
-        <div class="fx" data-fx="motif"></div>
+        <div class="fx" data-fx="motif"><div class="picks-row" data-pick="motifFx"></div><div class="row" data-key="motifFxAmount"></div></div>
         <div class="row" data-key="padLevel"></div>
-        <div class="fx" data-fx="pad"></div>
+        <div class="fx" data-fx="pad"><div class="picks-row" data-pick="padFx"></div><div class="row" data-key="padFxAmount"></div></div>
         <div class="row" data-key="noiseLevel"></div>
-        <div class="fx" data-fx="noise"></div>
+        <div class="fx" data-fx="noise"><div class="picks-row" data-pick="noiseFx"></div><div class="row" data-key="noiseFxAmount"></div></div>
+      </div>
+      <div class="group">
+        <label class="switch"><span data-info="Effects on each layer: Crush makes it grainy and lo-fi, like an old sampler; Drive makes it warm and saturated. Off: no effects.">Effects</span>
+          <input type="checkbox" role="switch" id="fx-on"></label>
       </div>
     </section>
     <section class="pane" id="pane-motifs" data-tab="motifs" data-name="Motifs" role="tabpanel" aria-labelledby="tab-motifs" hidden>
@@ -431,8 +491,9 @@
         <div class="row" data-key="motifDensity"></div>
         <div class="row" data-key="motifNoteLength"></div>
         <div class="row" data-key="motifArticulation"></div>
-        <div class="row octaves" data-sec="motifs" data-oct="motif"><div class="row-top"><span data-info="The octave range the motifs play in: from the lowest to the highest. 1 to 7 is the whole range (E1 to C7).">Octaves</span><output id="motifOctave-out"></output></div></div>
         <div class="row" data-key="motifReverb"></div>
+        <div class="picks-row" data-pick="motifSounds"></div>
+        <div class="row" data-weights="motif"></div>
       </div>
     </section>
     <section class="pane" id="pane-pad" data-tab="pad" data-name="Sound bed" role="tabpanel" aria-labelledby="tab-pad" hidden>
@@ -441,29 +502,19 @@
         <div class="row" data-key="padLength"></div>
         <div class="row" data-key="padDrift"></div>
         <div class="row" data-key="padWidth"></div>
-        <div class="row octaves" data-sec="pad" data-oct="pad"><div class="row-top"><span data-info="The octave range the sound bed uses: from the lowest to the highest. Motifs have their own range.">Octaves</span><output id="padOctave-out"></output></div></div>
         <div class="row" data-key="padOverlap"></div>
-        <div class="auto" data-rnd="pad"><span data-info="How each sound bed note moves to the next chord's note. Glide: one smooth slide. Steps: it jumps through a few random notes of the scale in between, then lands on the new note.">Transition</span>
-          <div class="seg two" role="radiogroup" aria-label="Transition">
-            <button type="button" role="radio" id="transition-0" aria-checked="true">Glide</button>
-            <button type="button" role="radio" id="transition-1" aria-checked="false">Steps</button>
-          </div>
+        <div class="picks-row" data-pick="padTransition"></div>
+        <div class="row" id="pad-cells-row">
+          <div class="row-top"><span data-info="The chord sounds Regen may use: a family in each register (low, mid and high notes). A register with nothing ticked uses every sound.">Sounds</span><output id="pad-cells-out"></output></div>
+          <div class="cells" id="pad-cells" role="group" aria-label="Chord sounds"></div>
         </div>
-        <p class="note caption">How notes move to the next chord: Glide slides, Steps walks through notes in between.</p>
+        <div class="row" data-weights="pad"></div>
       </div>
     </section>
     <section class="pane" id="pane-noise" data-tab="noise" data-name="Noise bed" role="tabpanel" aria-labelledby="tab-noise" hidden>
       <div class="pane-head"></div>
       <div class="group">
-        <div class="auto" data-rnd="noise"><span data-info="Slowly moves the noise Tone, Pan and Width over time. The level stays where you set it.">Sweep</span>
-          <div class="seg sweep" role="radiogroup" aria-label="Sweep">
-            <button type="button" role="radio" id="sweep-0" aria-checked="true">Off</button>
-            <button type="button" role="radio" id="sweep-1" aria-checked="false">Slow</button>
-            <button type="button" role="radio" id="sweep-3" aria-checked="false">Med</button>
-            <button type="button" role="radio" id="sweep-2" aria-checked="false">Fast</button>
-          </div>
-        </div>
-        <p class="note caption">Sweep moves the noise by itself: its tone, place and width drift over time.</p>
+        <div class="picks-row" data-pick="noiseSweep"></div>
         <div class="row" data-key="noiseTone"></div>
         <div class="row" data-key="noisePan"></div>
         <div class="row" data-key="noiseWidth"></div>
@@ -473,7 +524,7 @@
       <div class="pane-head"></div>
       <div class="group" id="view-group">
         <p class="subhead">Shape</p>
-        <div class="seg" role="radiogroup" aria-label="Visualization" data-rnd="view">
+        <div class="seg" role="radiogroup" aria-label="Visualization">
           <button type="button" role="radio" aria-checked="true" id="viz-shapes">Ring</button>
           <button type="button" role="radio" aria-checked="false" id="viz-traces">Lat</button>
           <button type="button" role="radio" aria-checked="false" id="viz-columns">Lon</button>
@@ -481,7 +532,7 @@
           <button type="button" role="radio" aria-checked="false" id="viz-none">None</button>
         </div>
         <p class="subhead">Color</p>
-        <div class="auto" data-rnd="view">
+        <div class="auto">
           <span data-info="Dark: the light on black. Light: the light drawn dark on white, in its color (white shows black). Color: the light color fills the screen and the lines are black; this turns Rainbow off. Custom: choose the background, line and glow colors.">Theme</span>
           <div class="seg theme" role="radiogroup" aria-label="Theme">
             <button type="button" role="radio" id="bg-0" aria-checked="true">Dark</button>
@@ -490,7 +541,7 @@
             <button type="button" role="radio" id="bg-3" aria-checked="false">Custom</button>
           </div>
         </div>
-        <div id="light-color-rows" data-rnd="view">
+        <div id="light-color-rows">
           <div class="row-top"><span data-info="The color of the visualization's light. In the Custom theme it sets the line color.">Color</span><output id="color-out"></output></div>
           <div class="swatches" id="swatches" role="radiogroup" aria-label="Color"></div>
         </div>
@@ -509,7 +560,7 @@
         </div>
         <div class="adv adv-view">
         <p class="subhead">Particles</p>
-        <div class="auto" data-rnd="view">
+        <div class="auto">
           <span data-info="Particles that show the noise bed. Grain: drifting specks; brighter noise is finer and faster, and louder noise adds more. Flock: particles that flock on the noise bed's wind, are drawn into the lines and vanish into them; Noise Tone sets how fast they fly.">Particles</span>
           <div class="seg bg" role="radiogroup" aria-label="Particles">
             <button type="button" role="radio" id="particles-0" aria-checked="false">Off</button>
@@ -518,15 +569,17 @@
           </div>
         </div>
         <p class="subhead">Light</p>
-        <div class="row" data-rnd="view">
+        <div class="row">
           <div class="row-top"><label for="glow" data-info="How much the light blooms around each line.">Glow</label><output id="glow-out" for="glow"></output></div>
           <input type="range" id="glow" min="0" max="1.25" step="0.01">
         </div>
-        <div class="row" data-rnd="view">
+        <div class="row">
           <div class="row-top"><label for="burn" data-info="How long the light stays before it fades.">Burn-in</label><output id="burn-out" for="burn"></output></div>
           <input type="range" id="burn" min="0" max="1.25" step="0.01">
         </div>
         </div>
+        <label class="switch"><span data-info="On: Regen and Auto regen also pick a new look (shape, theme, color, particles, glow and burn-in).">New look on Regen</span>
+          <input type="checkbox" role="switch" id="view-regen"></label>
       </div>
     </section>
     <section class="pane" id="pane-library" data-tab="library" data-name="Library" role="tabpanel" aria-labelledby="tab-library" hidden>
@@ -576,8 +629,12 @@
   const LABELS = {
     padLength: 'Length', padDrift: 'Drift', padWidth: 'Width', padOverlap: 'Blend', noiseLevel: 'Noise bed', noiseTone: 'Tone', noisePan: 'Pan', noiseWidth: 'Width',
     motifDensity: 'Density', motifNoteLength: 'Note length', motifArticulation: 'Smoothness', motifReverb: 'Reverb', motifLevel: 'Motifs',
-    padLevel: 'Sound bed', volume: 'Volume',
+    padLevel: 'Sound bed', volume: 'Volume', tempo: 'Tempo',
+    motifFxAmount: 'Amount', padFxAmount: 'Amount', noiseFxAmount: 'Amount',
   };
+  // Slider limits ([min, max, step]); every other slider is 0 … 1 in 0.01 steps.
+  const LIMITS = { volume: [0, 1.5, 0.01], tempo: [30, 140, 1] };
+  const limitsOf = (key) => LIMITS[key] || [0, 1, 0.01];
   // Sliders shown the other way round from their stored value (Smoothness: smooth at the
   // right, while motifArticulation is 0 legato .. 1 staccato).
   const INVERTED = new Set(['motifArticulation']);
@@ -605,7 +662,72 @@
     motifLevel: 'How loud the motifs are.',
     padLevel: 'How loud the sound bed (the sustained chords under everything) is.',
     volume: 'The output level. It changes live, with no new scene.',
+    tempo: 'The speed in beats per minute. Auto: from the mood (calm is slow, active is fast).',
+    motifFxAmount: 'How strong the motifs\' effect is.', padFxAmount: 'How strong the sound bed\'s effect is.',
+    noiseFxAmount: 'How strong the noise bed\'s effect is.',
   };
+  // The sound names (from core/data/instruments.json; written by tools/instruments.py).
+  // @instruments app begin
+  const SOUNDS = {
+    chords: [
+      ["round sine", "soft", ["low", "mid"]],
+      ["organ bloom", "soft", ["low"]],
+      ["drifting triangle", "soft", ["mid", "high"]],
+      ["clear sine", "soft", ["high"]],
+      ["glass undertone", "glass", ["low", "mid"]],
+      ["deep glass", "glass", ["low"]],
+      ["glass ensemble", "glass", ["mid", "high"]],
+      ["glass partials", "glass", ["high"]],
+      ["dark chorus", "warm", ["low", "mid"]],
+      ["velvet pulse", "warm", ["low"]],
+      ["warm horn", "warm", ["mid", "high"]],
+      ["amber pulse", "warm", ["high"]],
+      ["wide choir", "choir", ["low", "mid"]],
+      ["string ensemble", "choir", ["low"]],
+      ["high strings", "choir", ["mid", "high"]],
+      ["high choir", "choir", ["high"]],
+    ],
+    melody: [
+      ["glass bell", "bells"],
+      ["deep bell", "bells"],
+      ["tubular chime", "bells"],
+      ["singing bowl", "bells"],
+      ["marimba", "mallets"],
+      ["vibraphone", "mallets"],
+      ["soft vibraphone", "mallets"],
+      ["handpan", "mallets"],
+    ],
+  };
+  // @instruments app end
+  const FAMILY_NAMES = { soft: 'Soft', glass: 'Glass', warm: 'Warm', choir: 'Choir', bells: 'Bells', mallets: 'Mallets' };
+  const CHORD_FAMILIES = ['soft', 'glass', 'warm', 'choir'];   // ids 0..3 in padCells (never reorder)
+  const REGISTERS = ['low', 'mid', 'high'];
+  // Pick lists: [value, label]. Keys with `auto` can also follow the mood map (not in the spec).
+  const NOTES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+  const SCALE_NAMES = ['Phrygian', 'Aeolian', 'Dorian', 'Mixolydian', 'Ionian', 'Lydian', 'Locrian', 'Harmonic minor', 'Melodic minor'];
+  const PICKS = {
+    key: { label: 'Key', auto: true, items: NOTES.map((n, i) => [i, n]),
+           info: 'The home note. Auto: picked by the seed. Tick more than one: Regen picks one of them.' },
+    scale: { label: 'Scale', auto: true, items: SCALE_NAMES.map((n, i) => [i, n]),
+             info: 'The color of the notes, from dark (Phrygian) to bright (Lydian); the last three are extra. Auto: from the mood map (dark … bright).' },
+    progression: { label: 'Chord pattern', auto: true, items: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => [i, String(i + 1)]),
+                   info: 'How much the chords move, from 1 (barely moves) to 8 (moves a lot). Auto: from the mood map (calm … active).' },
+    padTransition: { label: 'Transition', items: [[0, 'Glide'], [1, 'Steps']],
+                     info: 'How each sound bed note moves to the next chord\'s note. Glide: one smooth slide. Steps: it jumps through a few notes of the scale in between.' },
+    noiseSweep: { label: 'Sweep', items: [[0, 'Off'], [1, 'Slow'], [3, 'Med'], [2, 'Fast']],
+                  info: 'Slowly moves the noise Tone, Pan and Width over time. The level stays where you set it.' },
+    motifFx: { label: 'Effect', items: [[0, 'None'], [1, 'Crush'], [2, 'Drive']], info: 'The motifs\' effect. Tick more than one: Regen picks one.' },
+    padFx: { label: 'Effect', items: [[0, 'None'], [1, 'Crush'], [2, 'Drive']], info: 'The sound bed\'s effect. Tick more than one: Regen picks one.' },
+    noiseFx: { label: 'Effect', items: [[0, 'None'], [1, 'Crush'], [2, 'Drive']], info: 'The noise bed\'s effect. Tick more than one: Regen picks one.' },
+  };
+  // Settings that are a slider (one value or a range) in the allowed values.
+  const SLIDER_KEYS = ['light', 'energy', 'motifLevel', 'padLevel', 'noiseLevel', 'motifFxAmount', 'padFxAmount', 'noiseFxAmount',
+    'motifDensity', 'motifNoteLength', 'motifArticulation', 'motifReverb', 'padLength', 'padDrift', 'padWidth', 'padOverlap',
+    'noiseTone', 'noisePan', 'noiseWidth'];
+  const FX_KEYS = ['motifFx', 'padFx', 'noiseFx'];
+  const SPEC_STORE = 'in-halation.allowed';     // the allowed values: { key: value | {range} | {pick} } (see docs/config-design.md)
+  const EFFECTS_STORE = 'in-halation.effects';  // '1' = the Effects rows show
+  const VIEW_REGEN_STORE = 'in-halation.viewRegen';   // '1' = Regen also picks a new look
   // Mood map: light (x) picks one of six scales, dark to bright; energy (y) sets tempo
   // (about 42 + 70 × energy bpm), how much the chords move, and timbre roughness.
   const SCALES = ['Phrygian', 'Aeolian', 'Dorian', 'Mixolydian', 'Ionian', 'Lydian'];
@@ -618,8 +740,6 @@
   // The choices (minutes). An older value (5, 10, 20, 40) opens as the nearest choice.
   const AUTO_CHOICES = [0, 0.5, 1, 3, 15, 60];
   const snapAuto = (v) => (!(v > 0) ? 0 : AUTO_CHOICES.slice(1).reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a)));
-  const RANDOM_STORE = 'in-halation.random';    // { sections: [ids], ranges: { key: [low, high] } }
-  const OLD_RANDOM_STORE = 'in-halation.randomize';   // '1' = the old Randomize all
   const HISTORY_STORE = 'in-halation.history';
   const TAB_STORE = 'in-halation.tab';          // the open section tab  // { steps: [{ at, label, link }], index }
   const SAVED_STORE = 'in-halation.saved';      // [{ at, query, view, display, auto }]
@@ -671,14 +791,8 @@
                        catch (e) { return { ...DISPLAY_DEFAULTS }; } })(),
     touchPlay: store.get(TOUCH_STORE) === '1', pointers: new Map(),
     autoMinutes: store.get(AUTO_STORE) === null ? 3 : snapAuto(Number(store.get(AUTO_STORE))),   // on by default: 3 min autoTimer: 0, autoAt: 0,
-    // Random sections (dice) and their ranges. The old Randomize all opens as the four sound sections.
-    random: (() => {
-      try {
-        const r = JSON.parse(store.get(RANDOM_STORE) || 'null');
-        if (r && Array.isArray(r.sections)) return { sections: r.sections, ranges: r.ranges || {} };
-      } catch (e) { /* unreadable: start empty */ }
-      return { sections: store.get(OLD_RANDOM_STORE) === '1' ? ['mood', 'motifs', 'pad', 'noise'] : [], ranges: {} };
-    })(),
+    // The allowed values (what Regen may pick); read in init, after the settings.
+    spec: null, effects: store.get(EFFECTS_STORE) === '1', viewRegen: store.get(VIEW_REGEN_STORE) === '1',
     pending: 0, suspendTimer: 0,
     viz: (() => {   // stored as a numeric id; older saved names are still read
       const v = store.get(VIZ_STORE);
@@ -705,7 +819,37 @@
       `&padTransition=${s.padTransition || 0}` +
       `&noiseSweep=${s.noiseSweep || 0}&noiseTone=${n(s.noiseTone)}&noisePan=${n(s.noisePan)}&noiseWidth=${n(s.noiseWidth)}` +
       `&motifFx=${s.motifFx || 0}&motifFxAmount=${n(s.motifFxAmount ?? 0.5)}&padFx=${s.padFx || 0}&padFxAmount=${n(s.padFxAmount ?? 0.5)}` +
-      `&noiseFx=${s.noiseFx || 0}&noiseFxAmount=${n(s.noiseFxAmount ?? 0.5)}`;
+      `&noiseFx=${s.noiseFx || 0}&noiseFxAmount=${n(s.noiseFxAmount ?? 0.5)}` + explicitQuery(s);
+  }
+  // The explicit picks (unset = from the seed and the mood map): key, scale, chord pattern,
+  // tempo, the allowed sounds and the octave weights.
+  function explicitQuery(s) {
+    const w = (a) => a.map((x) => Number(x.toFixed(2))).join(',');
+    return (s.key >= 0 ? `&key=${s.key}` : '') + (s.scale >= 0 ? `&scale=${s.scale}` : '') +
+      (s.progression >= 0 ? `&progression=${s.progression}` : '') + (s.tempo > 0 ? `&tempo=${s.tempo}` : '') +
+      (s.padCells ? `&padCells=${s.padCells}` : '') + (s.motifSounds ? `&motifSounds=${s.motifSounds}` : '') +
+      (s.padOctaveWeights ? `&padOctaveWeights=${w(s.padOctaveWeights)}` : '') +
+      (s.motifOctaveWeights ? `&motifOctaveWeights=${w(s.motifOctaveWeights)}` : '');
+  }
+  // The same keys read from a query (the core parses them too; its settings struct doesn't have them).
+  function explicitFrom(q) {
+    const p = new URLSearchParams(q);
+    const int = (k, f, lo, hi) => {
+      const v = p.get(k), x = Math.round(Number(v));
+      return v !== null && v !== '' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : f;
+    };
+    const weights = (k, n) => {
+      const v = p.get(k);
+      if (!v) return null;
+      const a = v.split(',').slice(0, n).map((x) => (Number(x) > 0 ? Number(x) : 0));
+      while (a.length < n) a.push(0);
+      return a.some((x) => x > 0) ? a : null;
+    };
+    const t = Number(p.get('tempo'));
+    return { key: int('key', -1, -1, 11), scale: int('scale', -1, -1, 8), progression: int('progression', -1, -1, 7),
+             tempo: p.get('tempo') && t > 0 ? Math.min(140, Math.max(30, Math.round(t))) : 0,
+             padCells: int('padCells', 0, 0, 4095), motifSounds: int('motifSounds', 0, 0, 255),
+             padOctaveWeights: weights('padOctaveWeights', 6), motifOctaveWeights: weights('motifOctaveWeights', 7) };
   }
 
   function parse(q) {
@@ -715,7 +859,7 @@
       const { traits, seed } = state.js.parseSceneQuery(q);
       parsed = { seed, traits: { ...traits, mood: Math.max(0, state.moods.findIndex((m) => m.value === traits.mood)) } };
     }
-    const t = parsed.traits;
+    const t = Object.assign(parsed.traits, explicitFrom(q));
     if (!t.useMap) {   // older settings: open at the mood's point on the map
       [t.light, t.energy] = MOOD_POINTS[t.mood] || MOOD_POINTS[0];
       t.noiseTone = t.brightness;
@@ -743,6 +887,7 @@
     $('scene-meta').textContent = `${sc.key} · ${Math.round(sc.tempo)} bpm`;
     $('scene-chords').replaceChildren(...sc.chords.map((c) => Object.assign(document.createElement('span'), { textContent: c })));
     $('seed-label').textContent = `Seed ${state.seed.toFixed(6)}`;
+    if (state.spec && $('tempo-out')) { syncPicks(); syncMoodMap(); }   // Auto keys show the scene's values
     if ('mediaSession' in navigator && 'MediaMetadata' in window) {
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
@@ -804,11 +949,11 @@
     else if (m.type === 'scene') {
       if (m.auto) {   // the worklet regenerated on its own (auto regen on the audio clock)
         state.seed = m.scene.seed;
-        if (m.query && soundMask()) {   // it also randomized the sound sections whose dice is on
+        if (m.query) {   // it sampled the allowed values
           state.settings = parse(m.query).traits;
           syncControls();
         }
-        if (randomOn('view')) randomizeView();
+        if (state.viewRegen) randomizeView();
         save();
         recordStep('Auto regen');
         state.autoAt = Date.now() + state.autoMinutes * 60000;
@@ -865,7 +1010,7 @@
     state.autoAt = 0;
     const seconds = state.playing && state.autoMinutes ? state.autoMinutes * 60 : 0;
     if (state.kind === 'wasm' && state.node) {
-      state.node.port.postMessage({ type: 'randomize', sections: soundMask(), ranges: state.random.ranges });
+      sendAllowed();
       state.node.port.postMessage({ type: 'autoRegen', seconds });
     }
     if (!seconds) return;
@@ -889,32 +1034,139 @@
 
   let resetSection = () => {};   // set in buildControls
 
-  // ---- random sections ------------------------------------------------------------------
-  // A section's dice on = Regen and Auto regen randomize it ("random mode": its sliders show
-  // ranges, its other controls are set only by randomizing). Bits match the core
-  // (ih_randomize_query); the View is randomized here.
-  const SECTION_BITS = { mood: 1, motifs: 2, pad: 4, noise: 8, mixLevels: 16, mixFx: 32 };
-  const SECTION_NAMES = { mood: 'Mood', motifs: 'Motifs', pad: 'Sound bed', noise: 'Noise bed', mixLevels: 'Mix levels', mixFx: 'Mix FX', view: 'View' };
-  const randomOn = (id) => state.random.sections.includes(id);
-  const soundMask = () => state.random.sections.reduce((m, id) => m | (SECTION_BITS[id] || 0), 0);
-  // Which section a range belongs to (the core's continuous settings of each section).
-  const KEY_SECTION = {};
-  for (const [bit, keys] of Object.entries(InHalationWasm.RANDOM_KEYS))
-    for (const key of keys) KEY_SECTION[key] = Object.keys(SECTION_BITS).find((id) => SECTION_BITS[id] === Number(bit));
-  const rangeOf = (key) => state.random.ranges[key] || [0, 1];
-
-  function storeRandom() {
-    store.set(RANDOM_STORE, JSON.stringify(state.random));
-    if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'randomize', sections: soundMask(), ranges: state.random.ranges });
+  // ---- allowed values -------------------------------------------------------------------
+  // The spec (what Regen may pick; docs/config-design.md "The model"): per query key a fixed
+  // value, {range: [lo, hi]} or {pick: [...]}. Key, Scale, Chord pattern and Tempo can also be
+  // left out ("Auto": from the seed and the mood map). The current settings always lie inside
+  // the spec: a change to the spec moves a setting that falls outside it (and plays that).
+  const isRange = (key) => !!(state.spec[key] && Array.isArray(state.spec[key].range));
+  const picksOf = (key) => {
+    const e = state.spec[key];
+    if (e === undefined) return null;   // Auto
+    return e && Array.isArray(e.pick) ? e.pick : [e];
+  };
+  // Equal weights over the octaves lo..hi (n bars), for settings without weights yet.
+  const octWeights = (lo, hi, n) => Array.from({ length: n }, (_, i) => (i + 1 >= lo && i + 1 <= hi ? 1 : 0));
+  // Every setting fixed at its current value (Auto keys stay Auto): the spec for settings
+  // without one, and for older links.
+  function specFrom(s) {
+    const out = {};
+    for (const key of SLIDER_KEYS) out[key] = s[key] ?? 0.5;
+    for (const key of ['key', 'scale', 'progression']) if (s[key] >= 0) out[key] = { pick: [s[key]] };
+    if (s.tempo > 0) out.tempo = s.tempo;
+    for (const key of ['padTransition', 'noiseSweep', ...FX_KEYS]) out[key] = { pick: [s[key] || 0] };
+    out.padCells = s.padCells || 0;
+    out.motifSounds = s.motifSounds || 0;
+    out.padOctaveWeights = s.padOctaveWeights || octWeights(s.padOctaveLow, s.padOctaveHigh, 6);
+    // Octave 7 holds only C7: it is not a bar (weight 0).
+    out.motifOctaveWeights = s.motifOctaveWeights || octWeights(s.motifOctaveLow, Math.min(6, s.motifOctaveHigh), 7);
+    return out;
   }
-  function setRandom(id, on) {
-    state.random.sections = on ? [...new Set([...state.random.sections, id])] : state.random.sections.filter((x) => x !== id);
-    storeRandom();
+  // A spec from storage or a link: only known keys with sane values; the rest from `s`.
+  function specClean(raw, s) {
+    const out = specFrom(s);
+    if (!raw || typeof raw !== 'object') return out;
+    const num = (x) => typeof x === 'number' && Number.isFinite(x);
+    const slider = (key, v) => {
+      const [lo, hi] = limitsOf(key), c = (x) => Math.min(hi, Math.max(lo, x));
+      if (num(v)) return c(v);
+      if (v && Array.isArray(v.range) && v.range.length === 2 && v.range.every(num)) {
+        const a = c(Math.min(...v.range)), b = c(Math.max(...v.range));
+        return a === b ? a : { range: [a, b] };
+      }
+      return undefined;
+    };
+    for (const key of SLIDER_KEYS) { const v = slider(key, raw[key]); if (v !== undefined) out[key] = v; }
+    if ('tempo' in raw) { const v = slider('tempo', raw.tempo); if (v !== undefined) out.tempo = v; } else delete out.tempo;
+    for (const [key, def] of Object.entries(PICKS)) {
+      const ok = def.items.map(([v]) => v), v = raw[key];
+      const list = v && Array.isArray(v.pick) ? v.pick.filter((x) => ok.includes(x)) : ok.includes(v) ? [v] : [];
+      if (list.length) out[key] = { pick: [...new Set(list)] };
+      else if (def.auto && !(key in raw)) delete out[key];
+    }
+    if (Number.isInteger(raw.padCells) && raw.padCells >= 0 && raw.padCells < 4096) out.padCells = raw.padCells;
+    if (Number.isInteger(raw.motifSounds) && raw.motifSounds >= 0 && raw.motifSounds < 1 << SOUNDS.melody.length) out.motifSounds = raw.motifSounds;
+    for (const [key, n] of [['padOctaveWeights', 6], ['motifOctaveWeights', 7]]) {
+      const w = raw[key];
+      if (Array.isArray(w) && w.length === n && w.every(num) && w.some((x) => x > 0)) out[key] = w.map((x) => Math.max(0, x));
+    }
+    return out;
+  }
+  function storeSpec() {
+    store.set(SPEC_STORE, JSON.stringify(state.spec));
+    sendAllowed();
+    noteChange();
+  }
+  // The worklet's auto regen samples the same spec (Volume is never random: it is added).
+  function sendAllowed() {
+    if (state.kind === 'wasm' && state.node)
+      state.node.port.postMessage({ type: 'allowed', spec: JSON.stringify(state.spec), extra: `&volume=${Number(state.settings.volume.toFixed(3))}` });
+  }
+  // The scene's value of an Auto key (to keep the scene when Auto is turned off).
+  function sceneValue(key) {
+    const sc = state.scene, s = state.settings;
+    if (key === 'key' && sc) {
+      const name = sc.key.split(' ')[0];
+      const i = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].indexOf(name);
+      return i >= 0 ? i : ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'].indexOf(name);
+    }
+    if (key === 'scale') return scaleIndex(s.light);
+    if (key === 'tempo' && sc) return Math.round(sc.tempo);
+    return -1;
+  }
+  // Moves the settings of these keys inside the spec. Returns true if any changed.
+  function fitSettings(keys) {
+    const s = state.settings;
+    let changed = false;
+    const set = (key, v) => { if (JSON.stringify(s[key]) !== JSON.stringify(v)) { s[key] = v; changed = true; } };
+    for (const key of keys) {
+      const e = state.spec[key];
+      if (key === 'tempo') {
+        if (e === undefined) set('tempo', 0);
+        else if (typeof e === 'number') set('tempo', e);
+        else {
+          const cur = s.tempo > 0 ? s.tempo : sceneValue('tempo');
+          set('tempo', Math.round(Math.min(e.range[1], Math.max(e.range[0], cur))));
+        }
+      } else if (SLIDER_KEYS.includes(key)) {
+        if (typeof e === 'number') set(key, e);
+        else if (isRange(key)) set(key, Math.min(e.range[1], Math.max(e.range[0], s[key])));
+      } else if (PICKS[key]) {
+        const list = picksOf(key);
+        if (!list) { set(key, -1); continue; }
+        const cur = s[key] ?? -1;
+        if (list.includes(cur)) continue;
+        if (cur === -1 && PICKS[key].auto) {
+          const v = sceneValue(key);
+          if (list.includes(v)) { set(key, v); continue; }
+          if (v === -1 && list.length === PICKS[key].items.length) continue;   // any is allowed: keep the scene
+        }
+        set(key, list[0]);
+      } else {
+        set(key, Array.isArray(e) ? [...e] : e);   // the allowed sounds and the octave weights
+        if (key.endsWith('OctaveWeights')) {   // the octave range follows the weights (as in the core)
+          const p = key.slice(0, -13), used = e.map((x, i) => (x > 0 ? i + 1 : 0)).filter(Boolean);
+          s[`${p}OctaveLow`] = used[0];
+          s[`${p}OctaveHigh`] = used[used.length - 1];
+        }
+      }
+    }
+    return changed;
+  }
+  // Sets one key of the spec (undefined = Auto) and plays what changed.
+  function setSpec(key, value) {
+    if (value === undefined) delete state.spec[key]; else state.spec[key] = value;
+    storeSpec();
+    specChanged([key]);
+  }
+  function specChanged(keys) {
+    const sweep = state.settings.noiseSweep;
+    const changed = fitSettings(keys);
     syncControls();
-    syncDice();
-  }
-  function syncDice() {
-    document.querySelectorAll('.pane-head .dice').forEach((b) => b.setAttribute('aria-pressed', String(randomOn(b.dataset.section))));
+    if (!changed) return;
+    if (state.settings.noiseSweep !== sweep && state.kind === 'wasm' && state.node)
+      state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
+    soundChanged();
   }
 
   // View: a random shape (not None), particles, theme (not Custom) and a preset color or Rainbow.
@@ -928,35 +1180,17 @@
                  glow: amount(), burnIn: amount() });
   }
 
-  // Randomize one section once, now (the seed stays: the same scene with new settings).
-  function randomizeSection(id) {
-    if (id === 'view') randomizeView();
-    else if (state.local) {
-      const keep = state.seed;
-      state.settings = parse(state.local.randomizeQuery(query(), randomSeed(), SECTION_BITS[id], state.random.ranges)).traits;
-      state.seed = keep;
-      syncControls();
-      setVolume(state.settings.volume);
-      if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
-      soundChanged();
-    } else {
-      status('Randomize needs the WebAssembly engine.');
-      return;
-    }
-    recordStep(`Randomize ${SECTION_NAMES[id]}`);
-  }
-
+  // Regen: a new seed, and a new pick inside the allowed values (Volume is kept). The pick
+  // needs the WebAssembly core; the Web Audio engine changes only the seed.
   function regen() {
     state.seed = randomSeed();
-    // The sound sections whose dice is on get random values (the core picks them from the
-    // seed, inside their ranges; Volume is kept). Needs the WebAssembly core.
-    if (soundMask() && state.local) {
-      state.settings = parse(state.local.randomizeQuery(query(), state.seed, soundMask(), state.random.ranges)).traits;
+    const sampled = state.local ? state.local.sampleAllowed(state.spec, state.seed) : null;
+    if (sampled) {
+      state.settings = parse(`${sampled}&volume=${Number(state.settings.volume.toFixed(3))}`).traits;
       syncControls();
-      setVolume(state.settings.volume);
       if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
     }
-    if (randomOn('view')) randomizeView();
+    if (state.viewRegen) randomizeView();
     save();
     preview();
     if (state.playing) play();
@@ -984,10 +1218,19 @@
     noiseFxAmount: 'Noise bed FX', motifLevel: 'Motifs level', padLevel: 'Sound bed level', noiseLevel: 'Noise bed level',
     shape: 'Shape', particles: 'Particles', theme: 'Theme', color: 'Color', rainbow: 'Color', colorCycle: 'Auto cycle',
     colorCycleSeconds: 'Cycle speed', glow: 'Glow', burnIn: 'Burn-in', themeBackground: 'Theme colors', themeLines: 'Theme colors', themeGlow: 'Theme colors',
+    key: 'Key', scale: 'Scale', progression: 'Chord pattern', tempo: 'Tempo', padCells: 'Sound bed sounds', motifSounds: 'Motif sounds',
+    padOctaveWeights: 'Sound bed octaves', motifOctaveWeights: 'Motif octaves',
   });
   function describe(before, after) {
     const a = new URLSearchParams(before || ''), b = new URLSearchParams(after), names = KEY_NAMES(), out = [];
-    for (const [k, v] of b) if (a.get(k) !== v && k !== 'v') { const n = names[k] || k; if (!out.includes(n)) out.push(n); }
+    const add = (k) => { const n = names[k] || k; if (!out.includes(n)) out.push(n); };
+    for (const [k, v] of b) if (a.get(k) !== v && k !== 'v' && k !== 'allowed') add(k);
+    if (a.get('allowed') !== b.get('allowed')) {   // the allowed values: name the keys that changed
+      try {
+        const x = JSON.parse(a.get('allowed') || '{}'), y = JSON.parse(b.get('allowed') || '{}');
+        for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) if (JSON.stringify(x[k]) !== JSON.stringify(y[k])) add(k);
+      } catch (e) { add('Allowed values'); }
+    }
     return out.length ? out.slice(0, 3).join(', ') + (out.length > 3 ? ' …' : '') : 'No change';
   }
   function storeSteps() {
@@ -1108,132 +1351,452 @@
     for (const m of ['traces', 'columns', 'weave', 'none']) $(`viz-${m}`).setAttribute('aria-checked', String(mode === m));
     // A new shape fades in while the old one fades out (both are drawn), over VIZ_FADE s.
     if (from && from !== mode) vizFade = { from, t: 0 };
+    syncFeel();
   }
   const VIZ_FADE = 1.2;   // seconds
   let vizFade = null;     // { from, t }: a shape change in progress
 
   // Slider value text: Pan shows L/C/R; the others show two decimals.
   function fmt(key, v) {
+    if (key === 'tempo') return `${Math.round(v)} bpm`;
     if (key !== 'noisePan') return v.toFixed(2);
     const d = Math.round((v - 0.5) * 200);
     return d === 0 ? 'C' : d < 0 ? `L${-d}` : `R${d}`;
   }
 
-  function buildControls() {
-    buildMoodMap();
-    document.querySelectorAll('.row[data-key]').forEach((row) => {
-      const key = row.dataset.key;
-      const ends = ENDS[key];
-      row.classList.toggle('worded', !!ends);
-      row.innerHTML = `<div class="row-top"><label for="${key}" data-info="${INFO[key]}">${LABELS[key]}</label><output id="${key}-out" for="${key}"></output></div>
-        <input type="range" id="${key}" min="0" max="${key === 'volume' ? 1.5 : 1}" step="0.01">` +
-        (ends ? `<div class="ends" aria-hidden="true"><span>${ends[0]}</span><span>${ends[1]}</span></div>` : '');
-      row.querySelector('input').addEventListener('input', (e) => {
-        state.settings[key] = INVERTED.has(key) ? Number((1 - Number(e.target.value)).toFixed(3)) : Number(e.target.value);
-        $(`${key}-out`).textContent = fmt(key, state.settings[key]);
-        if (key === 'volume') { setVolume(state.settings.volume); save(); } else soundChanged();
-      });
+  // A range slider (Range on): two thumbs, the band between them, a mark at the current value.
+  // A thumb dragged past the other one pushes it along. The spec changes on release.
+  function addDual(host, key, before) {
+    const [min, max, step] = limitsOf(key);
+    const dual = document.createElement('div');
+    dual.className = 'dual';
+    dual.hidden = true;
+    dual.dataset.key = key;
+    dual.innerHTML = `<span class="band"></span><input type="range" min="${min}" max="${max}" step="${step}" aria-label="${LABELS[key]}: the lowest value Regen may pick">` +
+      `<input type="range" min="${min}" max="${max}" step="${step}" aria-label="${LABELS[key]}: the highest value Regen may pick"><span class="mark"></span>`;
+    const [lo, hi] = dual.querySelectorAll('input');
+    const changed = (moved) => {
+      let a = Number(lo.value), b = Number(hi.value);
+      if (a > b) { if (moved === lo) { b = a; hi.value = a; } else { a = b; lo.value = b; } }
+      state.spec[key] = { range: INVERTED.has(key) ? [Number((1 - b).toFixed(3)), Number((1 - a).toFixed(3))] : [a, b] };
+      syncRange(key);
+    };
+    const done = () => { storeSpec(); specChanged([key]); };
+    for (const input of [lo, hi]) {
+      input.addEventListener('input', () => changed(input));
+      input.addEventListener('change', done);
+    }
+    host.insertBefore(dual, before);
+  }
+  function syncRange(key) {
+    const dual = document.querySelector(`.dual[data-key="${key}"]`);
+    if (!dual) return;
+    const on = isRange(key), row = dual.parentElement;
+    row.classList.toggle('ranged', on);
+    dual.hidden = !on;
+    const rb = row.querySelector(`[data-range="${key}"]`);
+    if (rb) rb.setAttribute('aria-pressed', String(on));
+    if (!on) return;
+    const [min, max] = limitsOf(key), f = (x) => (x - min) / (max - min);
+    const inv = INVERTED.has(key), [a, b] = state.spec[key].range;
+    const lo = inv ? 1 - b : a, hi = inv ? 1 - a : b;
+    const [loIn, hiIn] = dual.querySelectorAll('input');
+    if (document.activeElement !== loIn && document.activeElement !== hiIn) { loIn.value = lo; hiIn.value = hi; }
+    const v = state.settings[key] ?? min, shown = inv ? 1 - v : v;
+    // Thumb centres sit 8 px in from each end (a 16 px thumb).
+    const pos = (x) => `calc(8px + ${f(x)} * (100% - 16px))`;
+    Object.assign(dual.querySelector('.band').style, { left: pos(Math.min(lo, hi)), width: `calc(${Math.abs(f(hi) - f(lo))} * (100% - 16px))` });
+    dual.querySelector('.mark').style.left = pos(shown);
+  }
+
+  // Motif sounds: chips by family (a family chip ticks or clears its sounds); 0 = all.
+  function buildMotifSounds(row) {
+    const fams = [...new Set(SOUNDS.melody.map(([, f]) => f))], all = (1 << SOUNDS.melody.length) - 1;
+    row.innerHTML = `<div class="row-top"><span data-info="The sounds Regen may use for the motifs. A family name ticks or clears all of its sounds.">Sounds</span><output id="motifSounds-out"></output></div>` +
+      '<div class="picks" role="group" aria-label="Motif sounds">' +
+      fams.map((f, n) => (n ? '<span class="gap"></span>' : '') + `<button type="button" class="pick family" data-family="${f}">${FAMILY_NAMES[f] || f}</button>` +
+        SOUNDS.melody.map(([name, fam], i) => (fam === f ? `<button type="button" class="pick" data-i="${i}">${name}</button>` : '')).join('')).join('') + '</div>';
+    const mask = () => state.spec.motifSounds || all;
+    const put = (m) => { if (m & all) setSpec('motifSounds', (m & all) === all ? 0 : m & all); };
+    row.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => put(mask() ^ (1 << Number(b.dataset.i)))));
+    row.querySelectorAll('[data-family]').forEach((b) => b.addEventListener('click', () => {
+      const bits = SOUNDS.melody.reduce((m, [, f], i) => (f === b.dataset.family ? m | (1 << i) : m), 0);
+      put((mask() & bits) === bits ? mask() & ~bits : mask() | bits);
+    }));
+  }
+  function syncMotifSounds() {
+    const row = document.querySelector('.picks-row[data-pick="motifSounds"]');
+    const all = (1 << SOUNDS.melody.length) - 1, m = state.spec.motifSounds || all;
+    row.querySelectorAll('[data-i]').forEach((b) => b.setAttribute('aria-pressed', String(!!(m & (1 << Number(b.dataset.i))))));
+    row.querySelectorAll('[data-family]').forEach((b) => {
+      const bits = SOUNDS.melody.reduce((x, [, f], i) => (f === b.dataset.family ? x | (1 << i) : x), 0);
+      b.setAttribute('aria-pressed', String((m & bits) === bits));
     });
-    // Layer FX in the Mix: a type (0 None, 1 Crush, 2 Drive; ids stable) and an amount.
-    const FX_NAMES = { motif: 'Motifs', pad: 'Sound bed', noise: 'Noise bed' };
-    document.querySelectorAll('.fx[data-fx]').forEach((row) => {
-      const layer = row.dataset.fx, type = `${layer}Fx`, amount = `${layer}FxAmount`;
-      row.innerHTML = `<span>FX amount</span>
-        <input type="range" id="${amount}" min="0" max="1" step="0.01" aria-label="${FX_NAMES[layer]} FX amount" hidden>
-        <output id="${amount}-out" hidden></output>`;
-      // The FX type: a chip at the end of the layer's level line.
-      const chip = document.createElement('label');
-      chip.className = 'chip fx-chip';
-      chip.dataset.fx = layer;
-      chip.title = `An effect on the ${FX_NAMES[layer].toLowerCase()}: Crush makes it grainy and lo-fi, like an old sampler; Drive makes it warm and saturated.`;
-      chip.innerHTML = `<select aria-label="${FX_NAMES[layer]} FX">${['No FX', 'Crush', 'Drive'].map((t, i) => `<option value="${i}">${t}</option>`).join('')}</select>`;
-      chip.querySelector('select').addEventListener('change', (e) => {
-        state.settings[type] = Number(e.target.value);
-        syncControls();
-        soundChanged();
-      });
-      row.previousElementSibling.append(chip);
-      $(amount).addEventListener('input', (e) => {
-        state.settings[amount] = Number(e.target.value);
-        $(`${amount}-out`).textContent = state.settings[amount].toFixed(2);
-        soundChanged();
-      });
+    const n = SOUNDS.melody.filter((_, i) => m & (1 << i)).length;
+    $('motifSounds-out').textContent = n === SOUNDS.melody.length ? 'all' : `${n} of ${SOUNDS.melody.length}`;
+  }
+
+  // Chord sounds: families (rows) × registers (columns); bit = family × 3 + register; 0 = all.
+  function buildPadCells() {
+    const grid = $('pad-cells');
+    const names = (f, r) => SOUNDS.chords.filter(([, fam, regs]) => fam === f && regs.includes(r)).map(([n]) => n);
+    grid.innerHTML = '<span></span>' + REGISTERS.map((r) => `<span class="col">${r[0].toUpperCase() + r.slice(1)}</span>`).join('') +
+      CHORD_FAMILIES.map((f, fi) => `<button type="button" class="pick family" data-family="${fi}">${FAMILY_NAMES[f]}</button>` +
+        REGISTERS.map((r, ri) => `<button type="button" class="cell" data-bit="${fi * 3 + ri}" aria-label="${FAMILY_NAMES[f]}, ${r} notes: ${names(f, r).join(', ')}">${names(f, r).join('<br>')}</button>`).join('')).join('');
+    const mask = () => state.spec.padCells || 4095;
+    const put = (m) => { if (m) setSpec('padCells', m === 4095 ? 0 : m); };
+    grid.querySelectorAll('.cell').forEach((b) => b.addEventListener('click', () => put(mask() ^ (1 << Number(b.dataset.bit)))));
+    grid.querySelectorAll('[data-family]').forEach((b) => b.addEventListener('click', () => {
+      const bits = 7 << (Number(b.dataset.family) * 3);
+      put((mask() & bits) === bits ? mask() & ~bits : mask() | bits);
+    }));
+  }
+  function syncPadCells() {
+    const m = state.spec.padCells || 4095, grid = $('pad-cells');
+    grid.querySelectorAll('.cell').forEach((b) => b.setAttribute('aria-pressed', String(!!(m & (1 << Number(b.dataset.bit))))));
+    grid.querySelectorAll('[data-family]').forEach((b) => {
+      const bits = 7 << (Number(b.dataset.family) * 3);
+      b.setAttribute('aria-pressed', String((m & bits) === bits));
     });
-    // Octaves: a range slider in whole octaves (sound bed 1..6, motifs 1..7); a thumb
-    // dragged past the other one pushes it along. In random mode it sets the octaves Regen
-    // may pick from (ranges.motifOctaves / padOctaves), with marks at the current ones.
-    document.querySelectorAll('.row[data-oct]').forEach((row) => {
-      const p = row.dataset.oct, max = OCT_MAX[p], who = p === 'motif' ? "motifs'" : "sound bed's";
-      const dual = document.createElement('div');
-      dual.className = 'dual oct-range';
-      dual.innerHTML = '<span class="band"></span>' +
-        Array.from({ length: max }, (_, i) => `<span class="tick" style="left: ${octPos(i / (max - 1))}"></span>`).join('') +
-        `<input type="range" min="1" max="${max}" step="1" aria-label="The ${who} lowest octave">` +
-        `<input type="range" min="1" max="${max}" step="1" aria-label="The ${who} highest octave">` +
-        '<span class="mark"></span><span class="mark"></span>';
-      const [lo, hi] = dual.querySelectorAll('input');
-      const set = (moved) => {
-        const s = state.settings, low = `${p}OctaveLow`, high = `${p}OctaveHigh`;
-        let a = Number(lo.value), b = Number(hi.value);
-        if (a > b) moved === lo ? (b = a) : (a = b);
-        if (randomOn(row.dataset.sec)) {
-          state.random.ranges[`${p}Octaves`] = [a, b];
-          storeRandom();
-          syncControls();
-          return;
-        }
-        if (s[low] === a && s[high] === b) { syncControls(); return; }
-        s[low] = a; s[high] = b;
-        syncControls();
+    const empty = REGISTERS.filter((_, ri) => !CHORD_FAMILIES.some((_, fi) => m & (1 << (fi * 3 + ri))));
+    $('pad-cells-out').textContent = m === 4095 ? 'all' : empty.length ? `${empty.join(', ')}: every sound` : '';
+  }
+
+  // Octave weights: a bar per octave (1..6), dragged up or down; a drag across the bars paints
+  // them. At least one bar stays above the bottom. Motifs: octave 7 (only C7) is not a bar.
+  const WEIGHT_INFO = {
+    pad: 'How often the sound bed uses each octave, from 1 (low) to 6 (high). Drag the bars: tall is often, at the bottom is never.',
+    motif: 'How often a motif starts in each octave, from 1 (low, E1) to 6 (high). Drag the bars: tall is often, at the bottom is never.',
+  };
+  function buildWeights(row) {
+    const p = row.dataset.weights, key = `${p}OctaveWeights`, n = 6;
+    row.innerHTML = `<div class="row-top"><span data-info="${WEIGHT_INFO[p]}">Octaves</span><output id="${key}-out"></output></div>` +
+      `<div class="weights" role="group" aria-label="${p === 'pad' ? 'Sound bed' : 'Motif'} octaves">` +
+      Array.from({ length: n }, (_, i) => `<div class="bar" role="slider" tabindex="0" aria-label="Octave ${i + 1}" aria-valuemin="0" aria-valuemax="1" data-i="${i}"><span></span></div>`).join('') +
+      '</div><div class="weight-labels" aria-hidden="true">' + Array.from({ length: n }, (_, i) => `<span>${i + 1}</span>`).join('') + '</div>';
+    const box = row.querySelector('.weights');
+    const set = (i, v) => {
+      const w = [...state.spec[key]];
+      w[i] = Math.round(Math.min(1, Math.max(0, v)) * 20) / 20;
+      if (p === 'motif') w[6] = 0;
+      if (!w.some((x) => x > 0)) return false;
+      state.spec[key] = w;
+      syncWeights(row);
+      return true;
+    };
+    let dragging = false;
+    const at = (e) => {
+      const r = box.getBoundingClientRect();
+      set(Math.min(n - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * n))), 1 - (e.clientY - r.top) / r.height);
+    };
+    box.addEventListener('pointerdown', (e) => { dragging = true; box.setPointerCapture(e.pointerId); at(e); });
+    box.addEventListener('pointermove', (e) => { if (dragging) at(e); });
+    const end = () => { if (!dragging) return; dragging = false; storeSpec(); specChanged([key]); };
+    box.addEventListener('pointerup', end);
+    box.addEventListener('pointercancel', end);
+    box.addEventListener('keydown', (e) => {
+      const d = { ArrowUp: 0.1, ArrowRight: 0.1, ArrowDown: -0.1, ArrowLeft: -0.1 }[e.key], bar = e.target.closest('.bar');
+      if (!d || !bar) return;
+      e.preventDefault();
+      const i = Number(bar.dataset.i);
+      if (set(i, state.spec[key][i] + d)) { storeSpec(); specChanged([key]); }
+    });
+  }
+  function syncWeights(row) {
+    const p = row.dataset.weights, w = state.spec[`${p}OctaveWeights`];
+    row.querySelectorAll('.bar').forEach((bar, i) => {
+      bar.querySelector('span').style.height = `${Math.min(1, w[i]) * 100}%`;
+      bar.setAttribute('aria-valuenow', String(w[i]));
+    });
+    const used = w.slice(0, 6).map((x, i) => (x > 0 ? i + 1 : 0)).filter(Boolean);
+    $(`${p}OctaveWeights-out`).textContent = `${used[0]} to ${used[used.length - 1]}`;
+  }
+
+  // Effects (Mix): on = each layer's effect rows show; off (by hand) = no effects.
+  function setEffects(on, byHand) {
+    state.effects = on;
+    store.set(EFFECTS_STORE, on ? '1' : '0');
+    if (!on && byHand) {
+      for (const key of FX_KEYS) state.spec[key] = { pick: [0] };
+      storeSpec();
+      specChanged(FX_KEYS);
+    } else syncControls();
+  }
+
+  // ---- Feel -------------------------------------------------------------------------
+  // The plain view: pads with a word at each end of both axes. A pad only writes into the
+  // allowed values (a point = one value for both settings; Area on = a range for both), so
+  // the other tabs always show what it did. Light is the picture's glow and burn-in.
+  const PADS = [
+    { id: 'mood', title: 'Mood', x: 'light', y: 'energy', ends: ['dark', 'bright', 'calm', 'active'],
+      info: 'Dark to bright notes (the scale), and calm to active (speed and how much the chords move).' },
+    { id: 'space', title: 'Space', x: 'padWidth', y: 'motifReverb', ends: ['close', 'wide', 'dry', 'echoing'],
+      info: 'Close or wide chords (Sound bed → Width), and a dry or echoing room for the motifs (Motifs → Reverb).' },
+    { id: 'melody', title: 'Melody', x: 'motifDensity', y: 'motifNoteLength', ends: ['rare', 'often', 'short', 'long'],
+      info: 'How often motifs play (Motifs → Density), and how long their notes are (Motifs → Note length).' },
+    { id: 'movement', title: 'Movement', x: 'padDrift', y: 'padLength', flipY: true, ends: ['still', 'drifting', 'gentle', 'restless'],
+      info: 'How much the sound bed wavers (Sound bed → Drift), and gentle long chords to restless short ones (Sound bed → Length).' },
+    { id: 'air', title: 'Air', x: 'noiseTone', y: 'noiseLevel', ends: ['dark', 'bright', 'quiet', 'loud'],
+      info: 'The noise under everything: a dark rumble to a bright hiss (Noise bed → Tone), and how loud it is.' },
+    { id: 'light', title: 'Light', look: true, x: 'glow', y: 'burnIn', max: 1.25, ends: ['thin', 'glowing', 'quick fade', 'long trails'],
+      info: 'How the lines look: thin or glowing (View → Glow), and quick to fade or leaving long trails (View → Burn-in).' },
+  ];
+  const FEEL_LEVELS = [['motifLevel', 'Motifs'], ['padLevel', 'Sound bed'], ['noiseLevel', 'Noise bed']];
+  const SHAPES = [[0, 'Ring'], [2, 'Lat'], [3, 'Lon'], [4, 'Mesh'], [5, 'None']];
+
+  // A pad's place (0..1, y up) <-> its two settings.
+  const padValue = (pad, axis, t) => {
+    const v = axis === 'y' && pad.flipY ? 1 - t : t;
+    return Number((v * (pad.max || 1)).toFixed(3));
+  };
+  const padPlace = (pad, axis, v) => {
+    const t = v / (pad.max || 1);
+    return axis === 'y' && pad.flipY ? 1 - t : t;
+  };
+  const padNow = (pad, key) => (pad.look ? state.display[key] : state.settings[key]);
+  const padArea = (pad) => !pad.look && (isRange(pad.x) || isRange(pad.y));
+
+  function buildFeel() {
+    const box = $('feel-pads');
+    box.innerHTML = PADS.map((pad) => `<div class="pad-box" data-pad="${pad.id}">
+        <div class="pad-head"><span data-info="${pad.info}">${pad.title}</span>` +
+        (pad.look ? '' : `<button type="button" class="range-btn" data-pad-area="${pad.id}" aria-label="${pad.title}: an area for Regen">Area</button>`) + `</div>
+        <div class="map pad" tabindex="0" role="group" aria-label="${pad.title}. Left to right: ${pad.ends[0]} to ${pad.ends[1]}. Bottom to top: ${pad.ends[2]} to ${pad.ends[3]}. Arrow keys move the point.">
+          <span class="map-axis top">${pad.ends[3]}</span><span class="map-axis bottom">${pad.ends[2]}</span>
+          <span class="map-axis left">${pad.ends[0]}</span><span class="map-axis right">${pad.ends[1]}</span>
+          <span class="map-range" hidden></span><span class="map-dot"></span>
+        </div></div>`).join('');
+    for (const pad of PADS) {
+      const el = box.querySelector(`[data-pad="${pad.id}"] .map`);
+      const at = (e) => {
+        const r = el.getBoundingClientRect();
+        return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height))];
+      };
+      // A point: both settings get one value, and play.
+      const point = ([tx, ty]) => {
+        const x = padValue(pad, 'x', tx), y = padValue(pad, 'y', ty);
+        if (pad.look) { setDisplay({ [pad.x]: x, [pad.y]: y }); syncFeel(); return; }
+        const s = state.settings;
+        if (s[pad.x] === x && s[pad.y] === y) return;
+        s[pad.x] = state.spec[pad.x] = x;
+        s[pad.y] = state.spec[pad.y] = y;
+        storeSpec();
+        syncFeel();
+        if (pad.id === 'mood') { syncMoodMap(); syncPicks(); }
         soundChanged();
       };
-      lo.addEventListener('input', () => set(lo));
-      hi.addEventListener('input', () => set(hi));
-      row.append(dual);
-    });
-    // Transition ids: 0 portamento (Glide), 1 stepped (Steps).
-    [0, 1].forEach((mode) => $(`transition-${mode}`).addEventListener('click', () => {
-      state.settings.padTransition = mode;
-      syncControls();
+      // Area: the drag draws the rectangle (a range on both settings).
+      let anchor = null;
+      const area = ([tx, ty]) => {
+        const r = (key, axis, a, b) => {
+          const [lo, hi] = [padValue(pad, axis, a), padValue(pad, axis, b)].sort((m, n) => m - n);
+          state.spec[key] = lo === hi ? lo : { range: [lo, hi] };
+        };
+        r(pad.x, 'x', anchor[0], tx);
+        r(pad.y, 'y', anchor[1], ty);
+        syncFeel();
+      };
+      el.addEventListener('pointerdown', (e) => {
+        el.setPointerCapture(e.pointerId);
+        if (pad.id === 'mood') hintDone('map');
+        if (padArea(pad)) { anchor = at(e); area(anchor); } else point(at(e));
+      });
+      el.addEventListener('pointermove', (e) => {
+        if (!el.hasPointerCapture(e.pointerId)) return;
+        if (anchor) area(at(e)); else point(at(e));
+      });
+      const end = () => {
+        if (anchor) { anchor = null; storeSpec(); specChanged([pad.x, pad.y]); }
+        else if (!pad.look) syncControls();
+      };
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+      el.addEventListener('keydown', (e) => {
+        const step = e.shiftKey ? 0.1 : 0.02;
+        const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
+        if (!d || padArea(pad)) return;
+        e.preventDefault();
+        const c = (v) => Math.min(1, Math.max(0, v));
+        point([c(padPlace(pad, 'x', padNow(pad, pad.x)) + d[0]), c(padPlace(pad, 'y', padNow(pad, pad.y)) + d[1])]);
+        if (!pad.look) syncControls();
+      });
+      const btn = box.querySelector(`[data-pad-area="${pad.id}"]`);
+      if (btn) btn.addEventListener('click', () => {
+        const s = state.settings, r = (x) => Number(Math.min(1, Math.max(0, x)).toFixed(3));
+        const on = !padArea(pad);
+        for (const key of [pad.x, pad.y]) state.spec[key] = on ? { range: [r(s[key] - 0.12), r(s[key] + 0.12)] } : s[key];
+        storeSpec();
+        specChanged([pad.x, pad.y]);
+      });
+    }
+    // Levels: one value each (a range set in the Mix becomes one value when moved here).
+    $('feel-levels').innerHTML = FEEL_LEVELS.map(([key, label]) =>
+      `<label class="feel-level"><span>${label}</span><input type="range" min="0" max="1" step="0.01" data-feel-level="${key}" aria-label="${label} level"></label>`).join('');
+    $('feel-levels').querySelectorAll('input').forEach((input) => input.addEventListener('input', () => {
+      const key = input.dataset.feelLevel;
+      state.settings[key] = state.spec[key] = Number(input.value);
+      storeSpec();
+      syncRange(key);
+      $(key).value = state.settings[key];
+      syncFeel();
       soundChanged();
     }));
-    // Sweep ids: 0 off, 1 slow, 2 fast, 3 medium (ids are stable, not an order).
-    [0, 1, 2, 3].forEach((mode) => $(`sweep-${mode}`).addEventListener('click', () => {
-      state.settings.noiseSweep = mode;          // live: no new scene, no crossfade
-      syncControls();
-      save();
-      if (state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: mode });
-      syncSweepControls();
+    // Chord families: a chip ticks or clears its family in every register.
+    $('feel-chords').innerHTML = CHORD_FAMILIES.map((f, fi) =>
+      `<button type="button" class="pick fam-chip" data-family="${fi}">${FAMILY_NAMES[f]}<span class="cov" aria-hidden="true"><i></i><i></i><i></i></span></button>`).join('');
+    $('feel-chords').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      const m = state.spec.padCells || 4095, bits = 7 << (Number(b.dataset.family) * 3);
+      const next = (m & bits) === bits ? m & ~bits : m | bits;
+      if (next) setSpec('padCells', next === 4095 ? 0 : next);
     }));
+    // Motif families.
+    const fams = [...new Set(SOUNDS.melody.map(([, f]) => f))], all = (1 << SOUNDS.melody.length) - 1;
+    $('feel-melody').innerHTML = fams.map((f) => `<button type="button" class="pick" data-family="${f}">${FAMILY_NAMES[f] || f}</button>`).join('');
+    $('feel-melody').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      const m = state.spec.motifSounds || all;
+      const bits = SOUNDS.melody.reduce((x, [, f], i) => (f === b.dataset.family ? x | (1 << i) : x), 0);
+      const next = (m & bits) === bits ? m & ~bits : m | bits;
+      if (next & all) setSpec('motifSounds', (next & all) === all ? 0 : next & all);
+    }));
+    // Picture and color (the same settings as the View tab).
+    $('feel-shape').innerHTML = SHAPES.map(([id, label]) => `<button type="button" class="pick" role="radio" data-shape="${id}">${label}</button>`).join('');
+    $('feel-shape').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setViz(VIEWS[Number(b.dataset.shape)])));
+    $('feel-colors').innerHTML = COLORS.map(([name, hex]) =>
+      `<button type="button" class="swatch" role="radio" aria-label="${name}" data-feel-color="${hex}" style="background: ${hex}"></button>`).join('') +
+      '<button type="button" class="swatch rainbow" role="radio" aria-label="Rainbow: a random color for each voice" data-feel-color="rainbow"></button>';
+    $('feel-colors').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      const c = b.dataset.feelColor;
+      if (c === 'rainbow') { if (state.display.theme !== 2) setDisplay({ rainbow: true, ...linesIfCustom('rainbow') }); }
+      else setDisplay({ color: c, rainbow: false, ...linesIfCustom(c) });
+    }));
+  }
+
+  function syncFeel() {
+    const box = $('feel-pads');
+    if (!box || !box.firstChild || !state.spec) return;
+    const pos = (t) => `${Math.min(1, Math.max(0, t)) * 100}%`;
+    for (const pad of PADS) {
+      const wrap = box.querySelector(`[data-pad="${pad.id}"]`);
+      const dot = wrap.querySelector('.map-dot'), rect = wrap.querySelector('.map-range'), on = padArea(pad);
+      dot.style.left = pos(padPlace(pad, 'x', padNow(pad, pad.x)));
+      dot.style.top = pos(1 - padPlace(pad, 'y', padNow(pad, pad.y)));
+      rect.hidden = !on;
+      if (on) {
+        const span = (key, axis) => {
+          const [a, b] = isRange(key) ? state.spec[key].range : [state.settings[key], state.settings[key]];
+          return [padPlace(pad, axis, a), padPlace(pad, axis, b)].sort((m, n) => m - n);
+        };
+        const [x0, x1] = span(pad.x, 'x'), [y0, y1] = span(pad.y, 'y');
+        Object.assign(rect.style, { left: pos(x0), width: pos(x1 - x0), top: pos(1 - y1), height: pos(y1 - y0) });
+      }
+      const btn = wrap.querySelector('[data-pad-area]');
+      if (btn) btn.setAttribute('aria-pressed', String(on));
+    }
+    $('feel-levels').querySelectorAll('input').forEach((input) => {
+      if (document.activeElement !== input) input.value = state.settings[input.dataset.feelLevel];
+    });
+    const cells = state.spec.padCells || 4095;
+    $('feel-chords').querySelectorAll('button').forEach((b) => {
+      const fi = Number(b.dataset.family), bits = 7 << (fi * 3);
+      b.setAttribute('aria-pressed', String((cells & bits) === bits));
+      b.querySelectorAll('.cov i').forEach((i, ri) => i.classList.toggle('on', !!(cells & (1 << (fi * 3 + ri)))));
+    });
+    const all = (1 << SOUNDS.melody.length) - 1, m = state.spec.motifSounds || all;
+    $('feel-melody').querySelectorAll('button').forEach((b) => {
+      const bits = SOUNDS.melody.reduce((x, [, f], i) => (f === b.dataset.family ? x | (1 << i) : x), 0);
+      b.setAttribute('aria-pressed', String((m & bits) === bits));
+    });
+    $('feel-shape').querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(VIEWS[Number(b.dataset.shape)] === state.viz)));
+    const d = state.display;
+    $('feel-colors').querySelectorAll('button').forEach((b) => {
+      const c = b.dataset.feelColor;
+      b.setAttribute('aria-checked', String(c === 'rainbow' ? !!d.rainbow : !d.rainbow && c === d.color.toLowerCase()));
+      if (c === 'rainbow') b.disabled = d.theme === 2;
+    });
+  }
+
+  function buildControls() {
+    buildMoodMap();
+    // Slider rows: one value, or (Range on) two thumbs that limit what Regen picks. Volume is
+    // never random; Tempo can also be Auto (from the mood map).
+    document.querySelectorAll('.row[data-key]').forEach((row) => {
+      const key = row.dataset.key, ends = ENDS[key], [min, max, step] = limitsOf(key);
+      row.classList.toggle('worded', !!ends);
+      const extra = (key === 'tempo' ? `<button type="button" class="range-btn" data-auto="tempo" aria-label="Tempo from the mood">Auto</button>` : '') +
+        (key === 'volume' ? '' : `<button type="button" class="range-btn" data-range="${key}" aria-label="${LABELS[key]}: a range for Regen">Range</button>`);
+      row.innerHTML = `<div class="row-top"><label for="${key}" data-info="${INFO[key]}">${LABELS[key]}</label><span class="end"><output id="${key}-out" for="${key}"></output>${extra}</span></div>
+        <input type="range" id="${key}" min="${min}" max="${max}" step="${step}">` +
+        (ends ? `<div class="ends" aria-hidden="true"><span>${ends[0]}</span><span>${ends[1]}</span></div>` : '');
+      row.querySelector('input').addEventListener('input', (e) => {
+        const v = Number(e.target.value), s = state.settings;
+        s[key] = INVERTED.has(key) ? Number((1 - v).toFixed(3)) : v;
+        $(`${key}-out`).textContent = fmt(key, s[key]);
+        if (key === 'volume') { setVolume(s.volume); save(); sendAllowed(); return; }
+        state.spec[key] = s[key];   // one value: the spec follows the slider
+        storeSpec();
+        soundChanged();
+      });
+      const rb = row.querySelector('[data-range]');
+      if (rb) rb.addEventListener('click', () => {
+        const s = state.settings;
+        if (key === 'tempo' && !(s.tempo > 0)) return;
+        const cur = key === 'tempo' ? s.tempo : s[key];
+        if (isRange(key)) { setSpec(key, cur); return; }
+        const span = (max - min) * 0.15, r = (x) => Number((Math.round(x / step) * step).toFixed(3));
+        setSpec(key, { range: [r(Math.max(min, cur - span)), r(Math.min(max, cur + span))] });
+      });
+      const ab = row.querySelector('[data-auto]');
+      if (ab) ab.addEventListener('click', () => setSpec('tempo', state.spec.tempo === undefined ? sceneValue('tempo') : undefined));
+      if (key !== 'volume') addDual(row, key, row.querySelector('.ends'));
+    });
+    // Pick lists: chips; more than one ticked = Regen picks one. At least one stays ticked;
+    // for an Auto key, the last one off turns Auto on.
+    document.querySelectorAll('.picks-row[data-pick]').forEach((row) => {
+      const key = row.dataset.pick;
+      if (key === 'motifSounds') { buildMotifSounds(row); return; }
+      const def = PICKS[key];
+      row.innerHTML = `<div class="row-top"><span data-info="${def.info}">${def.label}</span><output id="${key}-out"></output></div>
+        <div class="picks" role="group" aria-label="${def.label}">` +
+        (def.auto ? `<button type="button" class="pick auto-pick" data-v="auto">Auto</button>` : '') +
+        def.items.map(([v, label]) => `<button type="button" class="pick" data-v="${v}">${label}</button>`).join('') + '</div>';
+      row.querySelectorAll('.pick').forEach((b) => b.addEventListener('click', () => {
+        const list = picksOf(key);
+        if (b.dataset.v === 'auto') {
+          if (list) setSpec(key, undefined);
+          else { const v = sceneValue(key); setSpec(key, { pick: v >= 0 ? [v] : def.items.map(([x]) => x) }); }
+          return;
+        }
+        const v = Number(b.dataset.v);
+        if (!list) { setSpec(key, { pick: [v] }); return; }
+        const next = list.includes(v) ? list.filter((x) => x !== v) : [...list, v].sort((x, y) => x - y);
+        if (!next.length) { if (def.auto) setSpec(key, undefined); return; }
+        setSpec(key, { pick: next });
+      }));
+    });
+    buildPadCells();
+    document.querySelectorAll('.row[data-weights]').forEach(buildWeights);
+    buildFeel();
+    // Effects (Mix): off = every layer without an effect, and the rows hidden.
+    $('fx-on').checked = state.effects;
+    $('fx-on').addEventListener('change', (e) => setEffects(e.target.checked, true));
+    $('view-regen').checked = state.viewRegen;
+    $('view-regen').addEventListener('change', (e) => { state.viewRegen = e.target.checked; store.set(VIEW_REGEN_STORE, state.viewRegen ? '1' : '0'); });
+    $('map-area').addEventListener('change', (e) => {
+      const s = state.settings, r = (x) => Number(Math.min(1, Math.max(0, x)).toFixed(3));
+      if (e.target.checked) {
+        state.spec.light = { range: [r(s.light - 0.12), r(s.light + 0.12)] };
+        state.spec.energy = { range: [r(s.energy - 0.12), r(s.energy + 0.12)] };
+      } else { state.spec.light = s.light; state.spec.energy = s.energy; }
+      storeSpec();
+      specChanged(['light', 'energy']);
+    });
     $('back-btn').addEventListener('click', back);
     $('forward-btn').addEventListener('click', forward);
-    // Dice in the section headers (Mix has two: levels and FX). A click doesn't open or close
-    // the section.
-    const DICE = { Mood: ['mood'], Mix: ['mixLevels', 'mixFx'], Motifs: ['motifs'], 'Sound bed': ['pad'], 'Noise bed': ['noise'], View: ['view'] };
-    const diceIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg>';
-    document.querySelectorAll('.pane').forEach((pane) => {
-      const sum = pane.querySelector('.pane-head'), ids = DICE[pane.dataset.name];
-      if (!ids) return;
-      for (const id of ids) {
-        const b = Object.assign(document.createElement('button'), { type: 'button', className: 'dice' });
-        b.dataset.section = id;
-        b.innerHTML = diceIcon + (ids.length > 1 ? (id === 'mixFx' ? 'FX' : 'Levels') : '');
-        b.setAttribute('aria-label', `Randomize ${SECTION_NAMES[id]} on Regen`);
-        b.title = `On: Regen and Auto regen randomize ${SECTION_NAMES[id]} (sliders set the range)`;
-        b.addEventListener('click', () => setRandom(id, !randomOn(id)));
-        sum.append(b);
-      }
-    });
-    syncDice();
-    // Section menus (⋯): Randomize now and Reset, in the header instead of buttons in the section.
-    const MENUS = {
-      Mood: [['Randomize', () => randomizeSection('mood')], ['Reset', () => resetSection('mood')]],
-      Mix: [['Randomize levels', () => randomizeSection('mixLevels')], ['Randomize FX', () => randomizeSection('mixFx')], ['Reset', () => resetSection('mix')]],
-      Motifs: [['Randomize', () => randomizeSection('motifs')], ['Reset', () => resetSection('motifs')]],
-      'Sound bed': [['Randomize', () => randomizeSection('pad')], ['Reset', () => resetSection('pad')]],
-      'Noise bed': [['Randomize', () => randomizeSection('noise')], ['Reset', () => resetSection('noise')]],
-      View: [['Randomize', () => randomizeSection('view')]],
-    };
+    // Section menus (⋯): Allow all, Fix all (at the current values) and Reset.
+    const MENUS = {};
+    for (const [name, id] of [['Mood', 'mood'], ['Mix', 'mix'], ['Motifs', 'motifs'], ['Sound bed', 'pad'], ['Noise bed', 'noise']])
+      MENUS[name] = [['Allow all', () => allowSection(id, true)], ['Fix all at current', () => allowSection(id, false)], ['Reset', () => resetSection(id)]];
+    MENUS.View = [['Randomize', () => { randomizeView(); recordStep('Randomize View'); }]];
     let openMenu = null;
     const closeMenu = () => { if (openMenu) { openMenu.btn.setAttribute('aria-expanded', 'false'); openMenu.el.remove(); openMenu = null; } };
     document.querySelectorAll('.pane').forEach((pane) => {
@@ -1285,7 +1848,7 @@
     $('lib-saved').addEventListener('click', () => libTab(true));
     $('save-btn').addEventListener('click', () => libTab(true));
     // Section tabs: one section at a time; the row scrolls sideways. The open tab is kept.
-    const TAB_ORDER = ['mood', 'mix', 'motifs', 'pad', 'noise', 'view', 'library', 'settings'];
+    const TAB_ORDER = ['feel', 'mood', 'mix', 'motifs', 'pad', 'noise', 'view', 'library', 'settings'];
     const nav = $('tabs');
     const showTab = (id, focus) => {
       document.querySelectorAll('.pane').forEach((pane) => { pane.hidden = pane.dataset.tab !== id; });
@@ -1307,40 +1870,14 @@
       nav.append(b);
     }
     nav.addEventListener('keydown', (e) => {   // arrow keys move between tabs
-      const i = TAB_ORDER.indexOf(store.get(TAB_STORE) || 'mood');
+      const i = TAB_ORDER.indexOf(store.get(TAB_STORE) || 'feel');
       const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
       if (!d) return;
       e.preventDefault();
       showTab(TAB_ORDER[(i + d + TAB_ORDER.length) % TAB_ORDER.length], true);
     });
-    showTab(TAB_ORDER.includes(store.get(TAB_STORE)) ? store.get(TAB_STORE) : 'mood');
-    // Range sliders for random mode: two thumbs (low, high), the band between them, and a mark
-    // at the current value.
-    const addDual = (host, key, before) => {
-      const dual = document.createElement('div');
-      dual.className = 'dual';
-      dual.hidden = true;
-      dual.dataset.key = key;
-      dual.innerHTML = `<span class="band"></span><input type="range" min="0" max="1" step="0.01" aria-label="${LABELS[key] || key}: lowest random value">` +
-        `<input type="range" min="0" max="1" step="0.01" aria-label="${LABELS[key] || key}: highest random value"><span class="mark"></span>`;
-      const [lo, hi] = dual.querySelectorAll('input');
-      const changed = () => {
-        let a = Number(lo.value), b = Number(hi.value);
-        if (a > b) [a, b] = [b, a];
-        state.random.ranges[key] = INVERTED.has(key) ? [Number((1 - b).toFixed(3)), Number((1 - a).toFixed(3))] : [a, b];
-        storeRandom();
-        syncRange(key);
-      };
-      lo.addEventListener('input', changed);
-      hi.addEventListener('input', changed);
-      host.insertBefore(dual, before);
-    };
-    document.querySelectorAll('.row[data-key]').forEach((row) => {
-      const key = row.dataset.key;
-      if (KEY_SECTION[key]) addDual(row, key, row.querySelector('.ends'));
-    });
-    document.querySelectorAll('.fx[data-fx]').forEach((row) => addDual(row, `${row.dataset.fx}FxAmount`, row.querySelector('output')));
-    // Mood map in random mode: a drag draws the rectangle that random mood points stay in.
+    showTab(TAB_ORDER.includes(store.get(TAB_STORE)) ? store.get(TAB_STORE) : 'feel');
+    // Mood map with Area on: a drag draws the rectangle that Regen's mood points stay in.
     {
       const map = $('mood-map');
       let anchor = null;
@@ -1348,39 +1885,78 @@
         const r = map.getBoundingClientRect();
         return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height))];
       };
+      const area = () => isRange('light') || isRange('energy');
       map.addEventListener('pointerdown', (e) => {
-        if (!randomOn('mood')) return;
+        if (!area()) return;
         e.stopImmediatePropagation();
         anchor = at(e);
         map.setPointerCapture(e.pointerId);
       }, true);
       map.addEventListener('pointermove', (e) => {
-        if (!randomOn('mood') || !anchor) return;
+        if (!area() || !anchor) return;
         e.stopImmediatePropagation();
         const [x, y] = at(e), r = (a, b) => [Number(Math.min(a, b).toFixed(3)), Number(Math.max(a, b).toFixed(3))];
-        state.random.ranges.light = r(anchor[0], x);
-        state.random.ranges.energy = r(anchor[1], y);
+        const one = ([a, b]) => (a === b ? a : { range: [a, b] });
+        state.spec.light = one(r(anchor[0], x));
+        state.spec.energy = one(r(anchor[1], y));
         syncMoodMap();
       }, true);
-      map.addEventListener('pointerup', () => { if (anchor) { anchor = null; storeRandom(); } }, true);
+      map.addEventListener('pointerup', () => {
+        if (!anchor) return;
+        anchor = null;
+        storeSpec();
+        specChanged(['light', 'energy']);
+      }, true);
     }
     $('hint-start').hidden = !!hints.map;
-    // Reset one section to its defaults (the seed and the other sections stay).
+    // The keys of each section (the spec and Reset).
     const SECTION_KEYS = {
-      mood: ['light', 'energy'],
-      mix: ['volume', 'motifLevel', 'padLevel', 'noiseLevel', 'motifFx', 'motifFxAmount', 'padFx', 'padFxAmount', 'noiseFx', 'noiseFxAmount'],
-      motifs: ['motifDensity', 'motifNoteLength', 'motifArticulation', 'phraseSoftness', 'motifOctaveLow', 'motifOctaveHigh', 'motifReverb'],
-      pad: ['padLength', 'padDrift', 'padWidth', 'padOctaveLow', 'padOctaveHigh', 'padOverlap', 'padTransition'],
+      mood: ['light', 'energy', 'key', 'scale', 'progression', 'tempo'],
+      mix: ['motifLevel', 'padLevel', 'noiseLevel', ...FX_KEYS, 'motifFxAmount', 'padFxAmount', 'noiseFxAmount'],
+      motifs: ['motifDensity', 'motifNoteLength', 'motifArticulation', 'motifReverb', 'motifSounds', 'motifOctaveWeights'],
+      pad: ['padLength', 'padDrift', 'padWidth', 'padOverlap', 'padTransition', 'padCells', 'padOctaveWeights'],
       noise: ['noiseSweep', 'noiseTone', 'noisePan', 'noiseWidth'],
     };
+    const SECTION_NAMES = { mood: 'Mood', mix: 'Mix', motifs: 'Motifs', pad: 'Sound bed', noise: 'Noise bed' };
+    // Allow all: every range open fully, every pick list ticked, every sound allowed (Key,
+    // Scale, Chord pattern and Tempo follow the map). Fix all: every key at its current value.
+    // The effects stay as they are while Effects is off; the octave weights stay.
+    const allowSection = (id, all) => {
+      const s = state.settings, keys = SECTION_KEYS[id].filter((k) => state.effects || !(FX_KEYS.includes(k) || k.endsWith('FxAmount')));
+      for (const key of keys) {
+        if (key.endsWith('OctaveWeights')) continue;
+        if (PICKS[key]?.auto || key === 'tempo') {
+          if (all) delete state.spec[key];
+          else if (key === 'tempo') { if (state.spec.tempo !== undefined) state.spec.tempo = s.tempo; }
+          else if (s[key] >= 0) state.spec[key] = { pick: [s[key]] };
+        } else if (SLIDER_KEYS.includes(key)) {
+          const [min, max] = limitsOf(key);
+          state.spec[key] = all ? { range: [min, max] } : s[key];
+        } else if (PICKS[key]) {
+          state.spec[key] = { pick: all ? PICKS[key].items.map(([v]) => v) : [s[key] || 0] };
+        } else if (all) state.spec[key] = 0;   // padCells, motifSounds: 0 = every sound
+      }
+      storeSpec();
+      specChanged(keys);
+      recordStep(`${all ? 'Allow all' : 'Fix all'}: ${SECTION_NAMES[id]}`);
+    };
+    // Reset one section to its defaults, as fixed values (the seed and the other sections stay).
     resetSection = (id) => {
-      const defaults = parse('light=0.6').traits;
-      for (const key of SECTION_KEYS[id]) state.settings[key] = defaults[key];
-      syncControls();
+      const defaults = parse('light=0.6').traits, fresh = specFrom(defaults);
+      for (const key of SECTION_KEYS[id]) {
+        if (key in fresh) state.spec[key] = fresh[key]; else delete state.spec[key];
+        state.settings[key] = defaults[key];
+      }
+      if (id === 'motifs' || id === 'pad') {
+        const p = id === 'pad' ? 'pad' : 'motif';
+        state.settings[`${p}OctaveLow`] = defaults[`${p}OctaveLow`];
+        state.settings[`${p}OctaveHigh`] = defaults[`${p}OctaveHigh`];
+      }
+      storeSpec();
+      specChanged(SECTION_KEYS[id]);
       setVolume(state.settings.volume);
-      if (id === 'noise' && state.kind === 'wasm' && state.node) state.node.port.postMessage({ type: 'sweep', value: state.settings.noiseSweep });
       soundChanged();
-      recordStep(`Reset ${{ mood: 'Mood', mix: 'Mix', motifs: 'Motifs', pad: 'Sound bed', noise: 'Noise bed' }[id]}`);
+      recordStep(`Reset ${SECTION_NAMES[id]}`);
     };
     // Touch screens have no hover: a tap on a label shows what the setting does (a tap
     // anywhere else hides it).
@@ -1417,6 +1993,9 @@
       const keep = state.seed;
       state.settings = parse('').traits;
       state.seed = keep;
+      state.spec = specFrom(state.settings);
+      storeSpec();
+      fitSettings(Object.keys(state.spec));
       syncControls();
       setVolume(state.settings.volume);
       soundChanged();
@@ -1588,6 +2167,7 @@
     [0, 1, 2].forEach((id) => $(`particles-${id}`).setAttribute('aria-checked', String(d.particles === id)));
     $('burn').value = d.burnIn;
     $('burn-out').textContent = d.burnIn.toFixed(2);
+    syncFeel();
     const hex = d.color.replace('#', '');
     // A 00 channel stays 0 (only an unreadable channel falls back to white).
     ink.base = [0, 2, 4].map((i) => { const v = parseInt(hex.slice(i, i + 2), 16); return Number.isNaN(v) ? 255 : v; });
@@ -1782,7 +2362,7 @@
       const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step] }[e.key];
       if (!d) return;
       e.preventDefault();
-      setMood(state.settings.light + d[0], state.settings.energy + d[1]);
+      if (!isRange('light') && !isRange('energy')) setMood(state.settings.light + d[0], state.settings.energy + d[1]);
     });
   }
 
@@ -1792,7 +2372,11 @@
     if (clamp(light) === s.light && clamp(energy) === s.energy) return;
     s.light = clamp(light);
     s.energy = clamp(energy);
+    state.spec.light = s.light;   // a point: one value
+    state.spec.energy = s.energy;
+    storeSpec();
     syncMoodMap();
+    syncPicks();
     soundChanged();
   }
 
@@ -1801,76 +2385,61 @@
     const dot = $('map-dot');
     dot.style.left = `${s.light * 100}%`;
     dot.style.top = `${(1 - s.energy) * 100}%`;
-    const rect = $('map-range'), [l0, l1] = rangeOf('light'), [e0, e1] = rangeOf('energy');
-    rect.hidden = !randomOn('mood');
+    const area = isRange('light') || isRange('energy');
+    const span = (key) => (isRange(key) ? state.spec[key].range : [s[key], s[key]]);
+    const rect = $('map-range'), [l0, l1] = span('light'), [e0, e1] = span('energy');
+    rect.hidden = !area;
     Object.assign(rect.style, { left: `${l0 * 100}%`, width: `${(l1 - l0) * 100}%`, top: `${(1 - e1) * 100}%`, height: `${(e1 - e0) * 100}%` });
-    const k = scaleIndex(s.light);
+    const scale = s.scale >= 0 ? SCALE_NAMES[s.scale] : SCALES[scaleIndex(s.light)];
     const calm = s.energy < 0.34 ? 'calm' : s.energy < 0.67 ? 'moving' : 'active';
-    $('map-readout').textContent = `${SCALES[k]} · ${calm}, about ${Math.round(42 + 70 * s.energy)} bpm`;
+    const bpm = s.tempo > 0 ? `${s.tempo} bpm` : state.scene ? `${Math.round(state.scene.tempo)} bpm` : `about ${Math.round(42 + 70 * s.energy)} bpm`;
+    $('map-readout').textContent = `${scale} · ${calm}, ${bpm}` + (area ? ' · Regen picks inside the area' : '');
   }
 
-  // Octave range sliders: the top octave of each, and where a value (0..1) sits on the track.
-  const OCT_MAX = { motif: 7, pad: 6 };
-  const octPos = (x) => `calc(8px + ${x} * (100% - 16px))`;
-
-  // One range slider: shown in random mode (its section's dice on), with the stored range and
-  // a mark at the current value (Smoothness shown the other way round).
-  function syncRange(key) {
-    const dual = document.querySelector(`.dual[data-key="${key}"]`);
-    if (!dual) return;
-    const on = randomOn(KEY_SECTION[key]), row = dual.parentElement;
-    row.classList.toggle('ranged', on);
-    dual.hidden = !on;
-    if (!on) return;
-    const inv = INVERTED.has(key), [a, b] = rangeOf(key);
-    const lo = inv ? 1 - b : a, hi = inv ? 1 - a : b;
-    const [loIn, hiIn] = dual.querySelectorAll('input');
-    if (document.activeElement !== loIn && document.activeElement !== hiIn) { loIn.value = lo; hiIn.value = hi; }
-    const v = state.settings[key] ?? 0.5, shown = inv ? 1 - v : v;
-    // Thumb centres sit 8 px in from each end (a 16 px thumb).
-    const pos = (x) => `calc(8px + ${x} * (100% - 16px))`;
-    Object.assign(dual.querySelector('.band').style, { left: pos(Math.min(lo, hi)), width: `calc(${Math.abs(hi - lo)} * (100% - 16px))` });
-    dual.querySelector('.mark').style.left = pos(shown);
+  // Pick lists: the ticked chips, and a short note (Auto: what the scene uses now).
+  function syncPicks() {
+    const s = state.settings;
+    // Tempo: Auto (from the mood map) shows the scene's tempo and has no range.
+    const auto = state.spec.tempo === undefined, t = s.tempo > 0 ? s.tempo : sceneValue('tempo');
+    $('tempo').value = t > 0 ? t : 70;
+    $('tempo').disabled = auto;
+    $('tempo-out').textContent = t > 0 ? `${auto ? 'auto · ' : ''}${t} bpm` : 'auto';
+    document.querySelector('[data-auto="tempo"]').setAttribute('aria-pressed', String(auto));
+    document.querySelector('[data-range="tempo"]').disabled = auto;
+    for (const [key, def] of Object.entries(PICKS)) {
+      const row = document.querySelector(`.picks-row[data-pick="${key}"]`);
+      if (!row) continue;
+      const list = picksOf(key);
+      row.querySelectorAll('.pick').forEach((b) => b.setAttribute('aria-pressed',
+        String(b.dataset.v === 'auto' ? !list : !!list && list.includes(Number(b.dataset.v)))));
+      const now = s[key] >= 0 ? s[key] : list ? -1 : sceneValue(key);
+      const item = def.items.find(([v]) => v === now);
+      $(`${key}-out`).textContent = !list ? (item ? `auto · ${item[1]}` : 'auto') : list.length > 1 && item ? `now ${item[1]}` : '';
+    }
   }
 
   function syncControls() {
     const s = state.settings;
     syncMoodMap();
     Object.keys(LABELS).forEach((key) => {
+      if (key === 'tempo') return;
       $(key).value = INVERTED.has(key) ? 1 - s[key] : s[key];
       $(`${key}-out`).textContent = fmt(key, s[key]);
     });
-    document.querySelectorAll('.row[data-oct]').forEach((row) => {
-      const p = row.dataset.oct, max = OCT_MAX[p], cur = [s[`${p}OctaveLow`], s[`${p}OctaveHigh`]];
-      const rnd = randomOn(row.dataset.sec), r = state.random.ranges[`${p}Octaves`];
-      const [a, b] = rnd ? (r ? [Math.min(...r), Math.max(...r)] : [1, max]) : cur;
-      $(`${p}Octave-out`).textContent = rnd ? `random ${a} to ${b}` : `${a} to ${b}`;
-      const dual = row.querySelector('.dual');
-      if (!dual) return;
-      const [lo, hi] = dual.querySelectorAll('input');
-      lo.value = a; hi.value = b;
-      const f = (v) => (v - 1) / (max - 1);
-      Object.assign(dual.querySelector('.band').style, { left: octPos(f(a)), width: `calc(${f(b) - f(a)} * (100% - 16px))` });
-      dual.querySelectorAll('.mark').forEach((m, i) => { m.hidden = !rnd; m.style.left = octPos(f(cur[i])); });
-    });
-    [0, 1].forEach((mode) => $(`transition-${mode}`).setAttribute('aria-checked', String((s.padTransition || 0) === mode)));
-    // Random mode: ranges instead of sliders, and the other randomized controls locked.
     document.querySelectorAll('.dual[data-key]').forEach((d) => syncRange(d.dataset.key));
-    document.querySelectorAll('[data-rnd]').forEach((el) => el.classList.toggle('locked', randomOn(el.dataset.rnd)));
-    document.querySelectorAll('.fx-chip').forEach((chip) => {
-      const v = s[`${chip.dataset.fx}Fx`] || 0, sel = chip.querySelector('select');
-      sel.value = String(v);
-      sel.disabled = randomOn('mixFx');
-      chip.classList.toggle('on', v !== 0);
-    });
+    syncPicks();
+    syncMotifSounds();
+    syncPadCells();
+    document.querySelectorAll('.row[data-weights]').forEach(syncWeights);
+    // Effects: the rows show only with Effects on; the amount only when an effect may be on.
     document.querySelectorAll('.fx[data-fx]').forEach((row) => {
-      const layer = row.dataset.fx, on = s[`${layer}Fx`] || 0, amount = `${layer}FxAmount`;
-      $(amount).hidden = $(`${amount}-out`).hidden = !on && !randomOn('mixFx');
-      $(amount).value = s[amount] ?? 0.5;
-      $(`${amount}-out`).textContent = (s[amount] ?? 0.5).toFixed(2);
+      row.hidden = !state.effects;
+      row.querySelector('.row[data-key]').hidden = !picksOf(`${row.dataset.fx}Fx`).some((v) => v !== 0);
     });
-    [0, 1, 2, 3].forEach((mode) => $(`sweep-${mode}`).setAttribute('aria-checked', String((s.noiseSweep || 0) === mode)));
+    $('fx-on').checked = state.effects;
+    $('map-area').checked = isRange('light') || isRange('energy');
     syncSweepControls();
+    syncFeel();
   }
 
   // ---- visualizations ---------------------------------------------------------------
@@ -2880,12 +3449,12 @@
   // settings are in the fragment (a browser never sends it to a server); every key is
   // written, so a later change of a default can't change an old link.
   const SHARE_BASE = 'https://inhalation.amplib.app/';   // the owner's domain (confirmed 2026-11-22)
-  const SHARE_VERSION = 1;
+  const SHARE_VERSION = 2;   // 2: the allowed values (`allowed`, JSON) and the explicit keys
   const hex6 = (c) => String(c || '').replace('#', '').toLowerCase();
 
-  function shareLink() { return linkFor(query(), VIEWS.indexOf(state.viz), state.display); }
+  function shareLink() { return linkFor(query(), VIEWS.indexOf(state.viz), state.display, state.spec); }
   // The link for any sound query (as query() writes it), shape id and display settings.
-  function linkFor(soundQuery, shape, d) {
+  function linkFor(soundQuery, shape, d, allowed) {
     const n = (v) => Number(Number(v).toFixed(3));
     let look = `&shape=${shape}&particles=${d.particles}&theme=${d.theme}&color=${hex6(d.color)}` +
       `&rainbow=${d.rainbow ? 1 : 0}&colorCycle=${d.colorCycle ? 1 : 0}&colorCycleSeconds=${Math.round(d.colorCycleSeconds)}` +
@@ -2895,6 +3464,7 @@
       look += `&themeBackground=${hex6(d.themeBackground || '#000000')}&themeLines=${keep(d.themeLines, ['rainbow'])}` +
         `&themeGlow=${keep(d.themeGlow, ['rainbow', 'lines'])}`;
     }
+    if (allowed) look += `&allowed=${encodeURIComponent(JSON.stringify(allowed))}`;
     return `${SHARE_BASE}#v=${SHARE_VERSION}&${soundQuery}${look}`;
   }
 
@@ -2939,6 +3509,15 @@
     const parsed = parse(fragment);   // the sound keys (old names too); look keys are ignored there
     state.settings = parsed.traits;
     state.seed = parsed.seed;
+    // The allowed values (v2). Without them (v1 links, older Saved items) every setting is
+    // fixed at the link's value.
+    let allowed = null;
+    try { allowed = JSON.parse(p.get('allowed') || 'null'); } catch (e) { /* unreadable: fixed */ }
+    state.spec = specClean(allowed, state.settings);
+    fitSettings(Object.keys(state.spec));
+    store.set(SPEC_STORE, JSON.stringify(state.spec));
+    if (FX_KEYS.some((k) => picksOf(k).some((v) => v !== 0))) setEffects(true);
+    sendAllowed();
     // Look keys: numbers are clamped to their range; an id that doesn't exist, or a missing
     // or unreadable key, gets the default.
     const D = DISPLAY_DEFAULTS;
@@ -2994,6 +3573,11 @@
     const parsed = parse(store.get(STORE) || `seed=${randomSeed()}`);
     state.settings = parsed.traits;
     state.seed = parsed.seed;
+    // The allowed values; without stored ones, every setting is fixed at its value.
+    try { state.spec = specClean(JSON.parse(store.get(SPEC_STORE) || 'null'), state.settings); }
+    catch (e) { state.spec = specFrom(state.settings); }
+    fitSettings(Object.keys(state.spec));
+    if (FX_KEYS.some((k) => picksOf(k).some((v) => v !== 0))) state.effects = true;
     buildControls();
     syncControls();
     preview();
