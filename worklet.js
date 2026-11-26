@@ -111,6 +111,16 @@
       return InHalationWasm.applyRanges(out, sections, ranges);
     }
 
+    /** The specimen sheet: how many instruments of a kind (0 chord, 1 melody). */
+    instrumentCount(kind) {
+      return this.x.ih_instrument_count ? this.x.ih_instrument_count(kind) : 0;
+    }
+
+    /** Sets one field of an instrument (fields: see ih_set_instrument). Returns true if set. */
+    setInstrument(kind, index, field, value) {
+      return !!(this.x.ih_set_instrument && this.x.ih_set_instrument(kind, index, field, value));
+    }
+
     /** The continuous settings of each random section (the ones a range can limit). */
     static get RANDOM_KEYS() {
       return {
@@ -270,6 +280,12 @@ if (typeof registerProcessor === 'function') {
           this.ng.touchMove(msg.id, msg.frequency);
         } else if (msg.type === 'touchEnd') {
           this.ng.touchEnd(msg.id);
+        } else if (msg.type === 'instrument') {
+          // The specimen sheet: {kind, index, field, value}, or {kind, index, fields: {field: value}}.
+          const f = msg.fields || { [msg.field]: msg.value };
+          for (const k in f) this.ng.setInstrument(msg.kind, msg.index, Number(k), f[k]);
+        } else if (msg.type === 'instrumentCount') {
+          this.port.postMessage({ type: 'instrumentCount', chords: this.ng.instrumentCount(0), melody: this.ng.instrumentCount(1) });
         }
       } catch (error) {
         this.port.postMessage({ type: 'error', message: String(error && error.message || error) });
