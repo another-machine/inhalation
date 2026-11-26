@@ -424,7 +424,7 @@
 
   <nav class="tabs" id="tabs" role="tablist" aria-label="Sections"></nav>
   <form id="settings-form" autocomplete="off">
-    <section class="pane" id="pane-feel" data-tab="feel" data-name="Basics" role="tabpanel" aria-labelledby="tab-feel" hidden>
+    <section class="pane" id="pane-feel" data-tab="feel" data-name="Controls" role="tabpanel" aria-labelledby="tab-feel" hidden>
       <div class="pane-head"></div>
       <div class="group">
         <div class="pads" id="feel-pads"></div>
@@ -445,8 +445,8 @@
           <div class="row-top"><span data-info="The color of the light. More colors and themes are in View.">Color</span></div>
           <div class="swatches" id="feel-colors" role="radiogroup" aria-label="Color"></div>
         </div>
-        <label class="switch"><span data-info="Every setting in its own tab instead of Basics: Mood, Mix, Motifs, Sound bed, Noise bed and View. There you can also set what Regen may pick. Turn it off in Settings.">Advanced</span>
-          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced: show every setting"></label>
+        <label class="switch"><span data-info="Every setting in its own tab instead of Controls: Mood, Mix, Motifs, Sound bed, Noise bed and View. There you can also set what Regen may pick. Turn it off in Settings.">Advanced controls</span>
+          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced controls: show every setting"></label>
       </div>
     </section>
     <section class="pane" id="pane-mood" data-tab="mood" data-name="Mood" role="tabpanel" aria-labelledby="tab-mood" hidden>
@@ -618,8 +618,8 @@
         </div>
         <label class="switch" for="touch-play"><span data-info="Press the screen for a note where its pitch is drawn. Hold and drag to glide.">Play by touch</span>
           <input type="checkbox" id="touch-play" role="switch"></label>
-        <label class="switch"><span data-info="On: every setting in its own tab (Mood, Mix, Motifs, Sound bed, Noise bed and View). Off: the Basics tab instead.">Advanced</span>
-          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced: show every setting"></label>
+        <label class="switch"><span data-info="On: every setting in its own tab (Mood, Mix, Motifs, Sound bed, Noise bed and View). Off: the Controls tab instead.">Advanced controls</span>
+          <input type="checkbox" role="switch" class="advanced-switch" aria-label="Advanced controls: show every setting"></label>
         <div class="line"><span class="fine"><span id="seed-label">Seed</span> · <span id="engine-label"></span></span>
           <button type="button" class="btn small" id="reset-btn">Reset to defaults</button></div>
       </div>
@@ -732,7 +732,7 @@
   const SPEC_STORE = 'in-halation.allowed';     // the allowed values: { key: value | {range} | {pick} } (see docs/config-design.md)
   const EFFECTS_STORE = 'in-halation.effects';  // '1' = the Effects rows show
   const VIEW_REGEN_STORE = 'in-halation.viewRegen';   // '1' = Regen also picks a new look
-  const ADVANCED_STORE = 'in-halation.advanced';      // '1' = the detail tabs show instead of Basics (id feel)
+  const ADVANCED_STORE = 'in-halation.advanced';      // '1' = the detail tabs show instead of Controls (id feel)
   const ADVANCED_TABS = ['mood', 'mix', 'motifs', 'pad', 'noise', 'view'];
   // Mood map: light (x) picks one of six scales, dark to bright; energy (y) sets tempo
   // (about 42 + 70 × energy bpm), how much the chords move, and timbre roughness.
